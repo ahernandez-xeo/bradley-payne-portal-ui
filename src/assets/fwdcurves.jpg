@@ -1,0 +1,367 @@
+import classes from "./Landing.module.scss";
+import {useRef, useEffect, useState, useContext, useCallback} from "react";
+import ValidUserContext from "../authCheck";
+import signoutIcon from "../assets/fa-logout.svg";
+import menuIcon from "../assets/fa-menu.svg";
+
+import pdfIcon from "../assets/akar-icons_pdf.svg";
+import csvIcon from "../assets/akar-icons_csv.svg";
+import pwrpIcon from "../assets/akar-icons_pwrp.svg";
+import excelIcon from "../assets/akar-icons_excel.svg";
+
+import pngIcon from "../assets/akar-icons_png.svg";
+import dividerIcon from "../assets/akar-icons_divider.svg";
+import Dashboard from "./Dashboard"; 
+import transparent_logo from "../assets/riot.jpg";
+import pv_transparent_logo from "../assets/priorityview.png";
+
+
+import Navigation from "./Navigation";
+import { slide as Menu } from 'react-burger-menu'
+
+const isMobileDevice = () => {
+  return /Mobi|Android/i.test(navigator.userAgent);
+};
+
+const Landing = () => {
+
+    const currentNav = Object.entries(JSON.parse(localStorage.getItem("navigation")));
+
+    const filteredNav = currentNav.filter(([a, b]) => {
+      return b.name.includes("Curves Export") == false
+    });
+
+    const exportdNav = currentNav.filter(([a, b]) => {
+      return b.name.includes("Curves Export") == true
+    });
+
+    const sortedNav = filteredNav.sort((a, b) => {
+      if(a[1].name > b[1].name) {
+        // If two elements have same number, then the one who has larger rating.average wins
+        return 1;
+      } else {
+        // If two elements have different number, then the one who has larger number wins
+        return -1;
+      }
+    });
+
+    var buttons = Object.keys(sortedNav).map(key => sortedNav[key][1].name)
+    var links = Object.keys(sortedNav).map(key => sortedNav[key][1].dashboards[0])
+
+    const [activeTab, setActiveTab] = useState(0);
+    const [menuOpen, setMenuOpen] = useState(isMobileDevice()? false: true);
+
+    const [activeButton, setActiveButton] = useState(0);
+    const [activeDashboard, setActiveDashboard] = useState(true);
+    const [activeURL, setActiveURL] = useState(links[0]);
+    const [displayTabs, setDisplayTabs] = useState(false);
+    const [displayToolbarButtons, setDisplayToolbarButtons] = useState(true);
+
+    const [defultFolder, setDefaultFolder] = useState('Home');
+    const [defultFolderId, setDefaultFolderId] = useState('Home');
+    const [defaultUser, setDefaultUser] = useState(JSON.parse(localStorage.getItem("user-name")) ?? "");
+    const [defaultGroup, setDefaultGroup] = useState(JSON.parse(localStorage.getItem("group")) ?? "default");
+    const [defaultCompany, setDefaultCompany] = useState((JSON.parse(localStorage.getItem("company_logo")) || JSON.parse(localStorage.getItem("company")))?? "default");
+    const [defaultClient, setDefaultClient] = useState((JSON.parse(localStorage.getItem("client_logo")) || JSON.parse(localStorage.getItem("client"))) ?? "default");
+
+    const [breadCrumbs, setBreadCrumbs] = useState([{"id":buttons[0], "name":buttons[0]}]);
+    const [currentButtons, setCurrentButtons] = useState(buttons);
+    const [currentLinks, setCurrentLinks] = useState(links);
+
+    //const [dashboardRef, setDashboardRef] = useState(undefined)
+    const dashboardRef = useRef(null)
+
+    const validUserContext = useContext(ValidUserContext);
+
+    const handleDashboardClick = (link) => {
+        setActiveDashboard(true)
+        setActiveURL(link)
+        setDisplayTabs(false)
+        setDisplayToolbarButtons(true)
+    }
+
+    const handleFolderClick = (name, id) => {
+      setDefaultFolder(name)
+      setDefaultFolderId(id)
+      breadCrumbs.push({"id":id, "name":name})
+      setBreadCrumbs(breadCrumbs)
+    }
+
+    const handleLogoutClick = () => {
+        validUserContext.logoutUser()
+    }
+  
+    const handleExportPDFClick = () => {
+      dashboardRef.current.firstChild.firstChild.childNodes[1].displayDialogAsync("export-pdf");
+    }
+
+    const handleExportCSVClick = () => {
+      dashboardRef.current.firstChild.firstChild.childNodes[1].displayDialogAsync("export-csv");
+    }
+
+    const handleExportPNGClick = () => {
+      dashboardRef.current.firstChild.firstChild.childNodes[1].exportImageAsync();
+    }
+
+    const handleExportPWRPClick = () => {
+      dashboardRef.current.firstChild.firstChild.childNodes[1].displayDialogAsync("export-powerpoint");
+    }
+
+    const handleCrossTabClick = () => {
+      dashboardRef.current.firstChild.firstChild.childNodes[1].displayDialogAsync("export-cross-tab");
+    }
+
+
+    const handleLogoClick = () => {
+      setActiveDashboard(false)
+    }
+
+    const handleButtonClick = (tabIndex, tabText) => {
+      validUserContext.localAuthCheck();
+      setActiveButton(tabIndex);
+      setActiveURL(currentLinks[tabIndex])
+      setActiveDashboard(true)
+      setDefaultFolder('Home')
+      setDisplayTabs(false)
+      if (isMobileDevice() ){
+        setMenuOpen(false)
+      }
+      setDisplayToolbarButtons(true)
+      let newBreadCrumbs
+      // Remove elements after the specific element
+      newBreadCrumbs = [{"id":tabText, "name":tabText}]
+      setBreadCrumbs(newBreadCrumbs)
+    };
+
+    const handleBreadCrumbClick = (folderName) => {
+      setActiveDashboard(false)
+      setDefaultFolder(folderName.name)
+      setDefaultFolderId(folderName.id)
+
+      let indexToRemove = breadCrumbs.indexOf(folderName);
+      let newBreadCrumbs
+      // Remove elements after the specific element
+      if (indexToRemove !== -1) {
+        newBreadCrumbs = breadCrumbs.slice(0, indexToRemove + 1);
+      }
+      setBreadCrumbs(newBreadCrumbs)
+    }
+
+    const handleMenuClick  = () => {
+      if (menuOpen) {
+        setMenuOpen(false)
+      } else {
+        setMenuOpen(true)
+      }
+    };
+
+    const renderContent = () => {
+      if (activeDashboard)
+          return renderDashboard()
+      else 
+          return renderNavigation()
+    } 
+
+    const renderNavigation = () => {
+      return (
+        <div>
+            <Navigation defaultFolder={defultFolder} defaultFolderId={defultFolderId} onDashboardClick={handleDashboardClick} onFolderClick={handleFolderClick}></Navigation>
+        </div>
+      )
+    }
+
+
+    const renderDashboard = () => {
+      return (
+        <div>
+            <Dashboard dashboardLinkProp={activeURL} displayTabs={displayTabs}></Dashboard>
+        </div>
+      )
+    };
+    
+    const rendeToolbar = () => {  
+      
+    }
+    
+    
+    const renderButtons = () => {  
+      return currentButtons.map((buttonText, index) => {
+        if (activeButton === index) {
+            return (<div className={`${classes.sideButton} ${classes.active}`} onClick={() => handleButtonClick(index, buttonText)}>{buttonText.replace(/^\d+\.\s*/, '')}</div>)
+        } else {
+            return (<div className={`${classes.sideButton}`} onClick={() => handleButtonClick(index, buttonText)}>{buttonText.replace(/^\d+\.\s*/, '')}</div>)
+        }
+      });
+    };
+
+    var companyLink = 'https://storage.googleapis.com/pv_portal_artifacts/'+defaultGroup.toLowerCase()+'.png'
+
+    const renderFull = () => {
+      return (
+          <div className={`${classes.landing}`}>
+
+          <div className={`${menuOpen ? classes.sidebar : classes.sidebarClosed}`}>  
+            <div className={`${classes.sidebarlogo}`}/>
+            <div className={`${classes.sidebarlogoCircle}`}>
+              <img className={classes.sidebarlogo} src={companyLink}></img>
+            </div>
+            <div className={`${classes.sideState}`}>{defaultUser}</div>
+            <div className={`${classes.sideHeader}`}>Navigation</div>
+            {renderButtons()}
+            <div className={`${classes.sideDownload}`}>
+              <img className={classes.sidebarlogo} src={pv_transparent_logo}></img>
+            </div>
+            <div className={`${classes.sidePortalName}`}>
+              <img className={classes.sidebarlogo} src={pv_transparent_logo}></img>
+            </div>
+          </div>
+          <div className={`${menuOpen ? classes.contentblock : classes.contentblockMobile}`}>
+            <div className={`${classes.toolbar}`}>
+                <img
+                      className={classes.icon}
+                      src={signoutIcon}
+                      alt="Signout icon"
+                      htmlFor="sign-out"
+                      onClick={() => handleLogoutClick()}
+                ></img>
+                <span className={`${classes.logout}`} onClick={() => handleLogoutClick()}>Logout</span>
+                {displayToolbarButtons? 
+                (
+                  <div>
+                      <img
+                      className={classes.dividericon}
+                      src={dividerIcon}
+                      alt="Divider icon"
+                      htmlFor="divider"
+                      ></img>
+                      <img
+                      className={classes.pdficon}
+                      src={pdfIcon}
+                      alt="PDF icon"
+                      htmlFor="download-pdf"
+                      onClick={() => handleExportPDFClick()}
+                      ></img>
+                      <img
+                      className={classes.pdficon}
+                      src={pngIcon}
+                      alt="PNG icon"
+                      htmlFor="download-png"
+                      onClick={() => handleExportPNGClick()}
+                      ></img>
+                      <img
+                      className={classes.pwrpicon}
+                      src={pwrpIcon}
+                      alt="Power Point icon"
+                      htmlFor="download-pwrp"
+                      onClick={() => handleExportPWRPClick()}
+                      ></img>
+                      <img
+                      className={classes.excelicon}
+                      src={excelIcon}
+                      alt="Excel icon"
+                      htmlFor="download-excel"
+                      onClick={() => handleCrossTabClick()}
+                      ></img>
+                  </div>
+                ):(
+                  <div></div>
+                )
+                }
+                
+                {/* {breadCrumbs.map((folderName) => (
+                  <div className={`${classes.breadcrumb}`}>{folderName.name} &gt;</div>
+                ))} */}
+            </div>
+            <div className={classes.dashboardblock} ref={dashboardRef} >
+                {renderContent()}
+            </div>
+          </div>
+          
+        </div>
+      )
+    }
+
+    const renderMobile = () => {
+      return (
+            <div className={`${classes.landing}`}>
+                <div className={`${menuOpen ? classes.sidebar : classes.sidebarClosed}`}>  
+                  <div className={`${classes.sidebarlogo}`}/>
+                  <div className={`${classes.sidebarlogoCircle}`}>
+                    <img className={classes.sidebarlogo} src={companyLink}></img>
+                  </div>                  
+                  <div className={`${classes.sideState}`}>{defaultUser}</div>
+                  <div className={`${classes.sideHeader}`}>Navigation</div>
+                  {renderButtons()}
+                  <div className={`${classes.sidePortalName}`}>
+                    <img className={classes.sidebarlogo} src={pv_transparent_logo}></img>
+                  </div>
+                </div>
+                <div className={`${classes.contentblockMobile}`}>
+                  <div className={`${classes.toolbar}`}>
+                      <img
+                            className={classes.icon}
+                            src={signoutIcon}
+                            alt="Signout icon"
+                            htmlFor="sign-out"
+                            onClick={() => handleLogoutClick()}
+                      ></img>
+                      <span className={`${classes.logout}`} onClick={() => handleLogoutClick()}>Logout</span>
+                      <img className={classes.toolbarMobileLogo} src={pv_transparent_logo}></img>
+                      <img
+                        className={classes.menuicon}
+                        src={menuIcon}
+                        alt="Menu icon"
+                        htmlFor="menu-click"
+                        onClick={() => handleMenuClick()}
+                      ></img>
+                  </div>
+                  <div className={classes.dashboardblock} ref={dashboardRef} >
+                      {renderContent()}
+                  </div>
+                </div>
+            </div>
+      )
+    }
+    
+
+    const renderTestMobile = () => {
+      return (
+        <div id="outer-container">
+        <Menu pageWrapId={ "page-wrap" } outerContainerId={ "outer-container" } />
+        <main id="page-wrap">
+        <Menu pageWrapId={'page-wrap'}
+          outerContainerId={'outer-container'}> 
+        <a id="home" className="menu-item" href="/">Home</a>
+        <a id="about" className="menu-item" href="/about">About</a>
+        <a id="contact" className="menu-item" href="/contact">Contact</a>
+      </Menu>
+        </main>
+      </div>
+      )
+    }
+
+
+    // var jwtToken = JSON.parse(localStorage.getItem("tableau-login-data"));
+    // localStorage.setItem("tableau-login-data", JSON.stringify("redeemed"));
+
+    // var inputProps = {
+    // };
+    
+    // if (jwtToken != "redeemed") {
+    //   inputProps.token = jwtToken;
+    // }
+    var dashboardURL = JSON.parse(localStorage.getItem("dashboard-url"));
+    dashboardURL = dashboardURL + "ACA-Travel/TravelMediaPerformance" + '?:showVizHome=no&:embed=true&:toolbar=no&:tabs=n'
+
+    return (
+      <div>
+        {isMobileDevice() ?
+          renderMobile()
+          :
+          renderFull()
+        }
+      </div>
+    );
+  };
+  
+  export default Landing;

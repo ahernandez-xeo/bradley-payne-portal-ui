@@ -1,0 +1,16 @@
+@import "../mixins";
+@import "../variables";
+
+
+.cryptoContainer {
+    max-height: 80px;
+    overflow: hidden;
+    width: 200px; 
+}
+
+.cryptoContainerScroll {
+    max-height: 80px;
+    overflow: hidden;
+    width: 200px; 
+    margin-left: -11px;
+}

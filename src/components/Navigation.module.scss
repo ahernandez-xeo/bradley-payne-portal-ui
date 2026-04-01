@@ -1,0 +1,38 @@
+@import "../mixins";
+@import "../variables";
+
+.folder {
+    display: inline-table;
+    align-items: center;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    cursor: pointer;
+    width: 250px;
+    height: 130px;
+    margin: 10px;
+    color: #212529;
+  }
+
+.folder:hover {
+    background-color: #bebdbd;
+    border: 1px solid $line-theme
+}
+
+.foldericon {
+    width: 75px;
+    height: 75px;
+    margin-right: 8px;
+    background: url('../assets/fa-folder-transparent.svg') center/contain no-repeat; /* Replace 'folder-icon.png' with your actual icon */
+  }
+
+.graphicon {
+  width: 75px;
+  height: 75px;
+  margin-right: 8px;
+  background: url('../assets/fa-graph.svg') center/contain no-repeat; /* Replace 'folder-icon.png' with your actual icon */
+}
+
+.navbody {
+  background-color: $back-color;
+}
