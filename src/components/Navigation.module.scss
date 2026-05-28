@@ -5,17 +5,17 @@
     display: inline-table;
     align-items: center;
     padding: 8px;
-    border: 1px solid #ccc;
+    border: 1px solid $border-color;
     border-radius: 3px;
     cursor: pointer;
     width: 250px;
     height: 130px;
     margin: 10px;
-    color: #212529;
+    color: $brand-black;
   }
 
 .folder:hover {
-    background-color: #bebdbd;
+    background-color: $brand-sage;
     border: 1px solid $line-theme
 }
 

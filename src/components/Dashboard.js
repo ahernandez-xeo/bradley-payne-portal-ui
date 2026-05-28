@@ -1,6 +1,7 @@
 import classes from "./Landing.module.scss";
 import {useRef, useEffect, useState, useContext} from "react";
 import ValidUserContext from "../authCheck";
+import { chartPalette } from "../themeColors";
 import dividerIcon from "../assets/akar-icons_divider.svg";
 import classesSpin from "../App.module.scss";
 
@@ -97,7 +98,7 @@ const Dashboard = ({dashboardLinkProp, displayTabs}) => {
 
     const renderTabs = () => {
 
-      const colors = ['#b1040c', '#e7272e','#ef822b','#fbc917','#a5cd3b','#007632','#3030ef','#0095db']
+      const colors = chartPalette;
   
       return tabArray.map((tab, index) => {
         if (activeTab === index) {
@@ -142,7 +143,7 @@ const Dashboard = ({dashboardLinkProp, displayTabs}) => {
       inputProps.token = jwtToken;
     }
     // dashboardURL = dashboardURL + dashboardLink.replace('/sheets','') + '?:showVizHome=no&:embed=true&:toolbar=no&:tabs=n&refresh=yes'
-    dashboardURL = "https://prod-useast-b.online.tableau.com/#/site/bpcapitalplanning/views/" + dashboardLink.replace('/sheets','') + '?:showVizHome=no&:embed=true&:toolbar=no&:tabs=n&refresh=yes'
+    dashboardURL = "https://us-east-1.online.tableau.com/#/site/bradleypayneplatform/views/" + dashboardLink.replace('/sheets','') + '?:showVizHome=no&:embed=true&:toolbar=no&:tabs=n&refresh=yes'
 
     console.log("Loading dashboard.");
 

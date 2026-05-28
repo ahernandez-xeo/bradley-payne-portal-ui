@@ -8,6 +8,10 @@
   -webkit-box-direction: normal;
   -ms-flex-direction: column;
   flex-direction: column;
-  margin-top: 15vh;
+  margin-top: 5vh;
   text-align: center;
+  min-height: 100vh;
+  background:
+    linear-gradient(to bottom, $brand-champagne 32vh, transparent 32vh),
+    linear-gradient(to bottom, $slate-theme 31.5vh, $brand-ivory 31.5vh);
 }

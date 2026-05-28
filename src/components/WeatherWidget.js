@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { themeColors } from "../themeColors";
 
 export default function WeatherWidget2() {
   useEffect(() => {
@@ -29,15 +30,15 @@ export default function WeatherWidget2() {
   return (
     <div>
       <div
-        style={{color: "#001c2d"}}
+        style={{color: themeColors.purple}}
         id="ww_ffb71811ab631"
         v="1.3"
         loc="auto"
-        a='{"t":"ticker","lang":"en","sl_lpl":1,"ids":[],"font":"Arial","sl_ics":"one_a","sl_sot":"fahrenheit","cl_bkg":"image","cl_font":"#FFFFFF","cl_cloud":"#FFFFFF","cl_persp":"#81D4FA","cl_sun":"#FFC107","cl_moon":"#FFC107","cl_thund":"#FF5722"}'
+        a={`{"t":"ticker","lang":"en","sl_lpl":1,"ids":[],"font":"Arial","sl_ics":"one_a","sl_sot":"fahrenheit","cl_bkg":"image","cl_font":"#FFFFFF","cl_cloud":"#FFFFFF","cl_persp":"${themeColors.aqua}","cl_sun":"${themeColors.champagne}","cl_moon":"${themeColors.lavender}","cl_thund":"${themeColors.coral}"}`}
       >
         More forecasts:{" "}
         <a
-          style={{color: "#001c2d"}}
+          style={{color: themeColors.purple}}
           href="https://oneweather.org/london/30_days/"
           id="ww_ffb71811ab631_u"
           target="_blank"

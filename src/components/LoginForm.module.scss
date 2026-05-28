@@ -5,13 +5,16 @@
 .form {
   display: -ms-grid;
   display: grid;
-  width: 400px;
-  margin: -17px;
-  background-color: white;
-  // border-radius: 17px;
-  padding: 20px;
+  width: 380px;
+  margin: 0;
+  background-color: $surface-white;
+  border: 1px solid $border-color;
+  border-top: 4px solid $accent-theme;
+  border-radius: 0 0 6px 6px;
+  box-shadow: 0 8px 40px $brand-purple-14;
+  padding: 32px 36px 28px;
   @include media-max-width() {
-    width: 95%;
+    width: 90%;
   }
 }
 
@@ -22,51 +25,61 @@ input {
 
 .input {
   @extend .mainInputStyle;
-  border: 0px solid $line-theme;
+  border: 1px solid $border-color;
+  border-radius: 4px;
   margin-top: $main-margin;
-  outline-color: $stone-theme;
-  color: $stone-theme;
-  background-color: #efefef;
-  // border-radius: 8px;
+  outline: 2px solid transparent;
+  outline-offset: 0;
+  color: $slate-theme;
+  background-color: $brand-ivory;
+  font-size: 15px;
+  font-weight: 500;
+  transition: border-color 0.2s, box-shadow 0.2s;
 
+  &:focus {
+    border-color: $brand-aqua;
+    box-shadow: 0 0 0 3px $brand-aqua-18;
+    background-color: $surface-white;
+    outline: none;
+  }
 }
 .loginBtn {
   @extend .mainInputStyle;
   margin-top: 21px;
-  font-size: 17px;
+  font-size: 16px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
   color: #ffffff;
   height: 45px;
   background-color: $sky-theme;
-  border: 0px solid $line-theme;
-  // border-radius: 8px;
+  border: none;
+  border-radius: 3px;
   margin-bottom: 20px;
-
+  font-weight: 700;
   cursor: pointer;
   &:active {
-    opacity: 50%;
+    opacity: 80%;
   }
   &:hover {
-    filter: invert(35%);
+    background-color: $brand-teal-hover;
   }
 }
 
 .loginBtnDisabled {
   @extend .mainInputStyle;
   margin-top: 21px;
-  font-size: 17px;
+  font-size: 16px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
   color: #ffffff;
   height: 45px;
   background-color: $stone-theme;
-  border: 0px solid $line-theme;
-  // border-radius: 8px;
+  border: none;
+  border-radius: 3px;
   margin-bottom: 20px;
-
-  cursor: not-allowed ;
+  cursor: not-allowed;
   &:active {
     opacity: 50%;
-  }
-  &:hover {
-    filter: invert(35%);
   }
 }
 
@@ -77,9 +90,9 @@ input {
 }
 
 .forgot {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: lighter;
-  color: #353d57;
+  color: $slate-theme;
   margin-top: 15px;
   text-align: left;
   text-decoration: underline;
@@ -87,23 +100,22 @@ input {
 }
 
 .loginInstructions {
-  margin-top: 10px;
-  margin-bottom: 15px;
-  font-size: 20px;
-  font-weight: bold;
-  color: #353d57;
+  margin-top: 0;
+  margin-bottom: 20px;
+  font-size: 15px;
+  font-weight: 400;
+  color: $text-muted;
   text-align: center;
+  line-height: 1.5;
 }
 
 .bottomtext {
   margin-top: 59px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: normal;
-  color: $stone-theme;
-  text-align: justify;
-  width: 556px;
+  color: $text-muted;
   text-align: center;
-
+  width: 556px;
 }
 
 .modal {
@@ -129,9 +141,9 @@ input {
 
 .backButton {
   margin-top: 45px;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: normal;
-  color: $stone-theme;
+  color: $slate-theme;
 }
 
 .backButton:hover {
@@ -145,15 +157,15 @@ input {
 }
 
 .disclaimer {
-  font-size: 10px; 
-  color: #666;
+  font-size: 11px; 
+  color: $text-muted;
   max-width: 50%;
 }
 
 
 .rememberMe {
-  font-size: 12px; 
-  color: #666;
+  font-size: 13px; 
+  color: $text-muted;
   max-width: 50%;
   margin-top: 20px;
   left: -80px;
@@ -163,8 +175,8 @@ input {
 
 @media only screen and (max-width: 600px) {
   .disclaimer {
-    font-size: 8px; 
-    color: #666;
+    font-size: 9px; 
+    color: $text-muted;
     max-width: 90%;
   }
 }

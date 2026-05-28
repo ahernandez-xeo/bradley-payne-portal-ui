@@ -1,18 +1,29 @@
+@import "variables";
+@import "fonts";
+
 * {
-  font-weight: 700;
-  color: #f5f5f5;
-  scrollbar-width: none; /* Hides scrollbar in Firefox */
-  -ms-overflow-style: none; /* Hides scrollbar in Internet Explorer/Edge */
+  color: $slate-theme;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 body {
   margin: 0;
-  font-family: "Montserrat",Arial,Helvetica,sans-serif;
+  font-family: $font-family-base;
+  font-weight: 400;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-image: url(../src/assets/BG.jpg);
-  background-size: 100vw 100vh
-  //background-image: url(../src/assets/BG.svg);
+  min-height: 100vh;
+  background-color: $brand-ivory;
+  background:
+    linear-gradient(to bottom, $brand-champagne 32vh, transparent 32vh),
+    linear-gradient(to bottom, transparent 32vh, $brand-ivory 32vh);
+}
+
+b,
+strong,
+button {
+  font-weight: 700;
 }
 
 ::-webkit-input-placeholder {
@@ -20,23 +31,23 @@ body {
   line-height: normal;
 }
 
-:-moz-placeholder { /* Firefox 18- */
-  text-align: left;  
+:-moz-placeholder {
+  text-align: left;
   line-height: normal;
 }
 
-::-moz-placeholder {  /* Firefox 19+ */
-  text-align: left;  
+::-moz-placeholder {
+  text-align: left;
   line-height: normal;
 }
 
-:-ms-input-placeholder {  
-  text-align: left; 
+:-ms-input-placeholder {
+  text-align: left;
   line-height: normal;
 }
 
 ::-webkit-scrollbar {
-  width: 0px;  /* Removes the vertical scrollbar */
-  height: 0px; /* Removes the horizontal scrollbar */
-  display: none; /* Ensures it's completely hidden */
+  width: 0px;
+  height: 0px;
+  display: none;
 }

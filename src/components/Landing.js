@@ -19,8 +19,9 @@ import excelIcon from "../assets/akar-icons_excel.svg";
 import pngIcon from "../assets/akar-icons_png.svg";
 import dividerIcon from "../assets/akar-icons_divider.svg";
 import Dashboard from "./Dashboard"; 
-import transparent_logo from "../assets/riot.jpg";
-import pv_transparent_logo from "../assets/circle_k.png";
+import transparent_logo from "../assets/BradleyPayne-logo.png";
+import pv_transparent_logo from "../assets/BP-logo-square.png";
+import bpLogoWhite from "../assets/BP-Oar-Logo-RGB.png";
 import fwd_curves from "../assets/fwdcurves.png";
 import CryptoWidget from "./CryptoWidget";
 import CoindeskWidget from "./CoindeskWidget";
@@ -58,18 +59,33 @@ const Landing = ({idleCountParam}) => {
         return -1;
       }
     });
-    const clientList = JSON.parse(localStorage.getItem("client_list")) || [];
+    const clientGroupRaw = JSON.parse(localStorage.getItem("client_list"));
+    const clientGroup =
+      (typeof clientGroupRaw === "string" && clientGroupRaw) ? clientGroupRaw : null;
+    const clientList = Array.isArray(clientGroupRaw) ? clientGroupRaw : [];
     const group = JSON.parse(localStorage.getItem("group")) ?? "default";
     const firstGroup = group === "Admin" 
       ? (clientList.length > 0 ? clientList[0] : "default")
       : group;
       
-    const clientFilteredNav = sortedNav.filter(([key, value]) => value.client === firstGroup);
+    //const clientFilteredNav = sortedNav.filter(([key, value]) => value.client === firstGroup);
+    const clientFilteredNav = sortedNav;
 
 
-    var buttons = Object.keys(clientFilteredNav).map(key => clientFilteredNav[key][1].name)
-    var links = Object.keys(clientFilteredNav).map(key => clientFilteredNav[key][1].dashboards[0])
-    var dashboardids = Object.keys(clientFilteredNav).map(key => clientFilteredNav[key][1].dashboard_ids[0])
+    const flattenNav = (nav) => nav.flatMap(([, entry]) =>
+      entry.dashboards.map((dashboard, i) => ({
+        label: entry.dashboards.length > 1
+          ? `${entry.name} - ${dashboard.split('/').pop()}`
+          : entry.name,
+        link: dashboard,
+        id: entry.dashboard_ids[i],
+      }))
+    );
+
+    const flatNav = flattenNav(clientFilteredNav);
+    var buttons = flatNav.map(n => n.label);
+    var links = flatNav.map(n => n.link);
+    var dashboardids = flatNav.map(n => n.id);
 
     const [activeTab, setActiveTab] = useState(0);
     const [menuOpen, setMenuOpen] = useState(isMobileDevice()? false: true);
@@ -402,9 +418,10 @@ const Landing = ({idleCountParam}) => {
     }
     const setSelectedClient = (event) => {
       var newFilteredNav = sortedNav.filter(([key, value]) => value.client === event);
-      var buttons = Object.keys(newFilteredNav).map(key => newFilteredNav[key][1].name)
-      var links = Object.keys(newFilteredNav).map(key => newFilteredNav[key][1].dashboards[0])
-      var dashboardids = Object.keys(newFilteredNav).map(key => newFilteredNav[key][1].dashboard_ids[0])
+      const flatNav = flattenNav(newFilteredNav);
+      var buttons = flatNav.map(n => n.label);
+      var links = flatNav.map(n => n.link);
+      var dashboardids = flatNav.map(n => n.id);
 
       setDefaultGroup(event);
       setCurrentButtons(buttons);
@@ -428,7 +445,8 @@ const Landing = ({idleCountParam}) => {
     var randomNumber = Math.floor(Math.random() * 1000000);
 
 
-    var companyLink = `https://storage.googleapis.com/bp_portal_artifacts/${defaultGroup.toLowerCase()}.png?v=${randomNumber}`
+    var logoKey = (clientGroup || defaultGroup).toLowerCase();
+    var companyLink = `https://storage.googleapis.com/bp_portal_artifacts/${logoKey}.png?v=${randomNumber}`
     
     var defaultLink = `https://storage.googleapis.com/bp_portal_artifacts/bradleypayne.png?v=${randomNumber}`
     const handleError = (event) => {
@@ -442,11 +460,10 @@ const Landing = ({idleCountParam}) => {
             <div className={`${menuOpen ? classes.sidebar : classes.sidebarClosed} `}
                   ref={containerRef}>
             <div className={`${classes.sidebartop}`}>
-              <div className={`${classes.sidebarlogo}`}/>
+
               <div className={`${classes.sidebarlogoCircle}`}>
                 <img className={classes.sidebarlogo} src={companyLink} onError={handleError}></img>
               </div>
-              {/* <div className={`${classes.sideState}`}>{defaultGroup}</div> */}
               <div className={classes.sideState}>
                 {group === "Admin" ? (
                   <div className={classes.selectDropdownWrapper}>
@@ -469,89 +486,65 @@ const Landing = ({idleCountParam}) => {
               </div>
               {renderButtons()}
             </div>
+            <div className={classes.sidebarBrand}>
+                <img src={bpLogoWhite} className={classes.sidebarBrandLogo} alt="Bradley Payne" />
+            </div>
             <div className={`${classes.sidebarbottom}`}>
                 <div className={`${classes.userinfoCircle}`}>
                     <ProfileCard />
                 </div>
-              </div>
+            </div>
           </div>
           <div className={`${menuOpen ? classes.contentblock : classes.contentblockMobile}`}>
             <div className={`${classes.toolbar}`}>
                 {displayToolbarButtons? 
                 (
-                  <div>
+                  <div className={classes.toolbarActions}>
                       <img
                       className={classes.dividericon}
                       src={dividerIcon}
                       alt="Divider icon"
-                      htmlFor="divider"
                       ></img>
                       <img
                       className={classes.pdficon}
                       src={pdfIcon}
                       alt="PDF icon"
-                      htmlFor="download-pdf"
                       onClick={() => handleExportPDFClick()}
                       ></img>
                       <img
                       className={classes.pdficon}
                       src={pngIcon}
                       alt="PNG icon"
-                      htmlFor="download-png"
                       onClick={() => handleExportPNGClick()}
                       ></img>
                       <img
                       className={classes.pwrpicon}
                       src={pwrpIcon}
                       alt="Power Point icon"
-                      htmlFor="download-pwrp"
                       onClick={() => handleExportPWRPClick()}
                       ></img>
                       <img
                       className={classes.excelicon}
                       src={excelIcon}
                       alt="Excel icon"
-                      htmlFor="download-excel"
                       onClick={() => handleCrossTabClick()}
                       ></img>
                       <img
                       className={classes.dividericon}
                       src={dividerIcon}
                       alt="Divider icon"
-                      htmlFor="divider"
                       ></img>
-                      {/* {activeURL.includes("MarketOverview") && (
-                        <>
-                            <div className={`${classes.subContainer}` } onClick={() => handleCheckboxChange()}>
-                              <label className={`${classes.subText}` } for="exampleCheckbox">Subscribe</label>
-                              <input className={`${classes.subCheckbox}` } type="checkbox" disabled={updatingSub} checked={subscriptionCheck} id="subCheckbox" name="subCheckbox"></input>
-                            </div>
-                            <img
-                            className={classes.dividericon}
-                            src={dividerIcon}
-                            alt="Divider icon"
-                            htmlFor="divider"
-                            ></img>
-                        </>
-
-                      )} */}
                       <img
                       className={`${classes.refreshicon} ${refreshSpin ? classes.spin : ''}`}
                       src={refreshIcon}
-                      alt="Excel icon"
-                      htmlFor="download-excel"
+                      alt="Refresh"
                       onClick={() => handleTriggerRefresh()}
                       ></img>
-
-                    </div>
+                  </div>
                 ):(
                   <div></div>
                 )
                 }
-                
-                {/* {breadCrumbs.map((folderName) => (
-                  <div className={`${classes.breadcrumb}`}>{folderName.name} &gt;</div>
-                ))} */}
             </div>
             <div className={classes.dashboardblock} ref={dashboardRef} >
                 {renderContent()}
@@ -568,7 +561,6 @@ const Landing = ({idleCountParam}) => {
                 {menuOpen && <div  className={classes.overlay} />} {/* Add the overlay */}
                 <div  ref={sidebarRef} className={`${menuOpen ? classes.sidebar : classes.sidebarClosed}`}>
                   <div className={`${classes.sidebartop}`}>
-                    <div className={`${classes.sidebarlogo}`}/>
                     <div className={`${classes.sidebarlogoCircle}`}>
                       <img className={classes.sidebarlogo} src={companyLink} onError={handleError}></img>
                     </div>
@@ -595,12 +587,14 @@ const Landing = ({idleCountParam}) => {
                     {/* <div className={`${classes.sideState}`}>{defaultGroup}</div> */}
                     {renderButtons()}
                   </div> 
+                  <div className={classes.sidebarBrand}>
+                      <img src={bpLogoWhite} className={classes.sidebarBrandLogo} alt="Bradley Payne" />
+                  </div>
                   <div className={`${classes.sidebarbottom}`}>
                     <div className={`${classes.userinfoCircle}`}>
                         <ProfileCard />
                     </div>
                   </div>
-
                 </div>
                 <div className={`${classes.contentblockMobile}`}>
                   <div className={`${classes.toolbar}`}>

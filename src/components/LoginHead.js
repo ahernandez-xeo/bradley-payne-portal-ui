@@ -1,5 +1,5 @@
 import classes from "./LoginHead.module.scss";
-import transparent_logo from "../assets/fsg-light.png"
+import transparent_logo from "../assets/BP-Oar-Logo-RGB.png"
 import { useContext} from "react";
 import ValidUserContext from "../authCheck";
 
@@ -19,9 +19,10 @@ function LoginHead() {
   }
 
   return (
-    <div> 
-      <a href="/"><img className={classes.loginLogo} src={transparent_logo} onClick={() => handleReset()}></img></a>
-      <title className={classes.loginTitle}>{actionText}</title>
+    <div className={classes.loginHeadWrapper}>
+      <a href="/"><img className={classes.loginLogo} src={transparent_logo} onClick={() => handleReset()} alt="Bradley Payne Advisors" /></a>
+      <div className={classes.tagline}>Client Portal</div>
+      {actionText ? <div className={classes.loginTitle}>{actionText}</div> : null}
     </div>
   );
 }

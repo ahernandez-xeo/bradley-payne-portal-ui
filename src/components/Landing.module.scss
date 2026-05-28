@@ -4,8 +4,8 @@
 .tab {
     display: inline-block;
     padding: 6px 7px;
-    background-color: whitesmoke;
-    color: #212529;
+    background-color: $surface-white;
+    color: $brand-black;
     font-weight: bold;
     cursor: pointer;
     border: 1px solid transparent;
@@ -13,17 +13,17 @@
     border-top-right-radius: 13px;
     transition: background-color 0.3s;
     margin-top: 11px;
-    font-size: 14px;
+    font-size: 15px;
   }
   
   .tab:hover {
-    background-color: #bebdbd;
+    background-color: $brand-cool-gray;
   }
   
   .tab.active {
-    border-bottom-color: #212529;
+    border-bottom-color: $brand-teal;
     border-width: medium;
-    background: whitesmoke;
+    background: $surface-white;
     margin: 5px;
   }
 
@@ -31,12 +31,12 @@
     float: left;
     margin-top: 18px;
     margin-left: 8px;
-    color: #212529;
+    color: $brand-black;
   }
 
   // .breadcrumb:hover {
   //   cursor: pointer;
-  //   color: #bebdbd;
+  //   color: $brand-sage;
   // }
 
   .logout {
@@ -45,13 +45,13 @@
     margin-right: 8px;
     color: white;
     font-weight: normal;
-    font-size: 16px;
+    font-size: 17px;
     font-weight: 700;
   }
 
   .logout:hover {
     cursor: pointer;
-    color: #bebdbd;
+    color: $accent-theme;
   }
 
   .tabs {
@@ -66,7 +66,7 @@
     background-repeat: no-repeat, repeat;
     background-position: center;
     display:none;
-    background-color: #eaebf0;
+    background-color: $brand-cool-gray;
   }
 
   .tabframe {
@@ -82,62 +82,61 @@
   }
 
   .icon {
-    float: right;
-    margin-top: 11px;
-    margin-right: calc((101vw - 1600px) / 2);
-    margin-right: 10px;
     cursor: pointer;
     height: 26px;
+    margin-right: 10px;
   }
 
   .menuicon {
-    float: left;
-    margin-top: 11px;
-    margin-right: calc((101vw - 1600px) / 2);
     margin-left: 10px;
     cursor: pointer;
     height: 26px;
   }
 
   .pdficon {
-    float: right;
-    margin-top: 8px;
     cursor: pointer;
-    height: 29px;
+    height: 27px;
+    margin-right: 4px;
+    opacity: 0.85;
+    transition: opacity 0.15s;
+    &:hover { opacity: 1; }
   }
 
   .downloadIcon {
-    float: right;
     cursor: pointer;
     height: 22px;
-    margin-top: 12px;
+    margin-right: 4px;
   }
-  .topWidget{
+
+  .topWidget {
     margin-top: 10px;
   }
 
   .pwrpicon {
-    float: right;
-    margin-top: 10px;
     cursor: pointer;
-    height: 25px;
-    margin-right: 8px;
+    height: 24px;
+    margin-right: 4px;
+    opacity: 0.85;
+    transition: opacity 0.15s;
+    &:hover { opacity: 1; }
   }
 
   .excelicon {
-    float: right;
-    margin-top: 8px;
     cursor: pointer;
-    height: 29px;
-    margin-right: 10px;
+    height: 27px;
+    margin-right: 4px;
+    opacity: 0.85;
+    transition: opacity 0.15s;
+    &:hover { opacity: 1; }
   }
 
   .refreshicon {
-    float: right;
-    margin-top: 11px;
     cursor: pointer;
     height: 22px;
-    margin-right: 10px;
+    margin-right: 14px;
+    opacity: 0.85;
+    transition: opacity 0.15s;
+    &:hover { opacity: 1; }
   }
 
   .spin {
@@ -179,18 +178,26 @@
   }
 
   .dividericon {
-    float: right;
-    margin-top: 7px;
-    height: 31px;
+    height: 28px;
+    opacity: 0.35;
+    margin-right: 4px;
   }
 
   .toolbar {
     width: 100%;
-    fill: black;
     background-color: $slate-theme;
-    display: inline-block;
-    margin-bottom: -3px;
-    height: 40px;
+    border-bottom: 2px solid $brand-champagne-45;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    height:60px;
+    box-sizing: border-box;
+  }
+
+  .toolbarActions {
+    display: flex;
+    align-items: center;
+    height: 100%;
   }
 
   .contentblock {
@@ -234,27 +241,23 @@
     width: 100%;
     fill: black;
     display: inline-block;
-    height: calc( (100vh - 45px));
+    height: calc(100vh - 52px);
     background-color: $back-color;
     overflow: auto;
-    border-top-left-radius: 1%;
+    // border-top-left-radius: 1%;
   }
 
   .sidebar {
     width: 240px;
-    height: calc( (100vh ));
-    fill: black;
-    border-bottom-color: $sky-theme;
-    border-width: medium;
-    border-bottom-style: solid;
+    height: 100vh;
     background-color: $slate-theme;
+    border-right: 1px solid rgba(255, 255, 255, 0.07);
     display: block;
     position: fixed!important;
     z-index: 1001;
-    // overflow-y: auto;
     overflow: hidden;
-    left: 0; /* Start position for the sidebar */
-    transition: left 0.5s ease, width 0.5s ease; /* Add transition */
+    left: 0;
+    transition: left 0.5s ease, width 0.5s ease;
     text-align: center;
   }
 
@@ -264,11 +267,7 @@
 
   .sidebarClosed {
     width: 0px;
-    height: calc( (100vh));
-    fill: black;
-    border-bottom-color: $sky-theme;
-    border-width: medium;
-    border-bottom-style: solid;
+    height: 100vh;
     background-color: $slate-theme;
     display: block;
     position: fixed!important;
@@ -276,21 +275,36 @@
     overflow: auto;
   }
 
-  .sidebarlogo {
+  .sidebarBrand {
+    height: 70px;
+    display: flex;
     align-items: center;
-    width: 150px;
-    text-align: center;
-    vertical-align: middle;
-    line-height: 50px;
+    justify-content: center;
+    padding: 0 20px;
+    flex-shrink: 0;
+    margin-top: 40px;
   }
-  .sidebarlogoCircle {
-    margin-top: 42px;
-    width: 150px;
+
+  .sidebarBrandLogo {
     height: 150px;
+    filter: brightness(0) invert(1);
+  }
+
+  .sidebarlogo {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .sidebarlogoCircle {
+    margin-top: 24px;
+    width: 96px;
+    height: 96px;
     border-radius: 50%;
-    background-color: #f0eff1;
+    background-color: $surface-white;
+    border: 2px solid $brand-champagne-45;
     overflow: hidden;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
     display: inline-flex;
     position: relative;
     align-items: center;
@@ -321,35 +335,46 @@
   .sidePortalName{
     text-align: center;
     bottom: 0;
-    font-size: 23px;
+    font-size: 24px;
     width: 100%;
     margin-top: max(10px, calc(100vh - 800px));
   }
 
   .sideState {
-    height: 50px;
     width: 100%;
     text-align: center;
-    vertical-align: middle;
-    line-height: 50px;
-    margin-bottom:40px;
-    font-size: 17px;
-    font-weight: normal;
+    padding: 10px 12px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: $nav-label;
+    border-bottom: 1px solid $nav-divider;
+    box-sizing: border-box;
+
+    span, * {
+      color: inherit;
+    }
   }
 
   .sideButton {
-    height: 40px;
+    height: 42px;
     width: 100%;
-    border-color: white;
-    border-width: medium;
-    text-align: center;
-    vertical-align: middle;
-    line-height: 40px;
-    font-weight: normal;
-    background-color: #3c5e87;
-    margin: 1px;
-    overflow: hidden;
+    text-align: left;
+    padding-left: 20px;
+    line-height: 42px;
+    font-weight: 400;
     font-size: 14px;
+    letter-spacing: 0.2px;
+    background-color: transparent;
+    border: none;
+    border-left: 3px solid transparent;
+    border-bottom: 1px solid $nav-divider;
+    margin: 0;
+    overflow: hidden;
+    color: $nav-text;
+    box-sizing: border-box;
+    transition: background-color 0.15s, color 0.15s, border-left-color 0.15s;
   }
 
   .sideDownload {
@@ -357,27 +382,31 @@
     position: absolute;
     bottom: 0;
     margin-bottom: 80px;
-    font-size: 23px;
+    font-size: 24px;
     width: 100%;
   }
 
   .sideDownload:hover {
     cursor: pointer;
-    color: #f5f5f5;
+    color: $nav-text-strong;
   }
 
   .sideButton.active {
-    background-color: #fab400;
-    color: #3c5e87;
+    background-color: $nav-active-bg;
+    border-left-color: $nav-active;
+    color: $nav-active;
+    font-weight: 700;
   }
 
   .sideButton.active:hover {
-    color: #f5f5f5;
+    color: $nav-active;
   }
 
   .sideButton:hover {
     cursor: pointer;
-    color: $sky-theme;
+    background-color: $nav-hover-bg;
+    color: $nav-text-strong;
+    border-left-color: $nav-active-border;
   }
 
   .tabbar {
@@ -418,7 +447,7 @@
     width: 40px;
     height: 40px;
     border: 4px solid rgba(0, 0, 0, 0.3);
-    border-top: 4px solid #ffffff; /* Adjust the color as needed */
+    border-top: 4px solid $accent-theme;
     border-radius: 50%;
     animation: spin 1s linear infinite;
     position: fixed;
@@ -440,7 +469,7 @@
         background-color: $back-color;
         margin-left: 0;
         width: 100%;
-        height: calc( (100vh - 45px)) !important;
+        height: calc(100vh - 52px) !important;
         min-height: 900px;
         background-repeat: no-repeat, repeat;
         background-position: center;
@@ -476,7 +505,7 @@
 }
 
 .sidebarContactSupport {
-  font-size: 15px;
+  font-size: 16px;
   line-height: 4px;
   display: inline-flex;
   margin-top: 10px;
@@ -493,35 +522,36 @@
 }
 
 .sidebartop {
-  height: calc( (100vh - 80px));
+  height: calc(100vh - 188px);
   overflow-y: scroll;
   overflow-x: hidden;
 }
 
 .sidebarbottom {
   height: 75px;
-  border-top: 1px solid #ccc;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background-color: rgba(0, 0, 0, 0.15);
 }
 
 .selectDropdown {
-  background-color: #001c2d; /* Match sidebar button background */
-  color: white;              /* White text */
-  border: 1px solid #001c2d; /* Remove default outline look */
+  background-color: rgba(0, 0, 0, 0.18);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 4px;
   padding: 6px 10px;
-  font-size: 14px;
+  font-size: 15px;
   width: 100%;
   box-sizing: border-box;
   margin-top: 8px;
   text-align: center;
-  appearance: none; /* Remove default OS styling */
+  appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
 }
 
 .selectDropdown:focus {
   outline: none;
-  border-color: #001c2d; /* Optional: Highlight color on focus */
+  border-color: $accent-theme;
 }
 
 .selectArrow {
@@ -530,7 +560,7 @@
   right: 60px;
   pointer-events: none;
   transform: translateY(-50%);
-  font-size: 12px;
+  font-size: 13px;
   color: white;
 }
 .selectDropdownWrapper {

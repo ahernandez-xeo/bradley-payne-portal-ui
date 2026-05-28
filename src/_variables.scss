@@ -1,11 +1,67 @@
-$submit-color: #85e4cb;
+// —— Base colors ——
+$brand-teal: #006e63;
+$brand-purple: #522d6d;
+$brand-black: #060808;
+
+// Deeper shade of the brand purple (kept for secondary accents)
+$brand-purple-deep: #38204e;
+
+// Deep shade of the brand teal — the logo's hero color — used for the dark nav shell
+$brand-teal-deep: #00564c;
+
+// —— Coordinating colors ——
+$brand-ivory: #f5f1e8;
+$brand-champagne: #c8a96b;
+$brand-cool-gray: #d9dde1;
+$brand-sage: #a7b8ae;
+$brand-lavender: #b8a6c9;
+
+// Clean cool near-white for app/dashboard surfaces
+$brand-cloud: #f4f6f7;
+
+// —— Accent colors (use sparingly) ——
+$brand-coral: #e67e73;
+$brand-copper: #b87333;
+$brand-aqua: #3fc1b5;
+
+// —— Derived / interaction ——
+$brand-teal-hover: #005952;
+$brand-purple-light: #3d2260;
+$brand-champagne-hover: #b89958;
+$text-muted: #5c5668;
+$surface-white: #ffffff;
+
+$brand-champagne-40: rgba(200, 169, 107, 0.4);
+$brand-champagne-45: rgba(200, 169, 107, 0.45);
+$brand-champagne-85: rgba(200, 169, 107, 0.85);
+
+$brand-teal-12: rgba(0, 110, 99, 0.12);
+$brand-teal-18: rgba(0, 110, 99, 0.18);
+$brand-aqua-18: rgba(63, 193, 181, 0.18);
+
+$brand-purple-14: rgba(82, 45, 109, 0.14);
+
+// —— Navigation (dark teal shell) tokens — built to combine with the teal OAR logo ——
+$nav-surface: $brand-teal-deep;
+$nav-text: rgba(255, 255, 255, 0.85);
+$nav-text-strong: #ffffff;
+$nav-label: rgba(255, 255, 255, 0.62);
+$nav-active: $brand-champagne;
+$nav-active-bg: rgba(255, 255, 255, 0.1);
+$nav-active-border: $brand-champagne;
+$nav-hover-bg: rgba(255, 255, 255, 0.08);
+$nav-divider: rgba(255, 255, 255, 0.1);
+
+$font-family-base: "Eurostile", "Eurostile Extended", "Microgramma D Extended", "Bank Gothic Medium", "Arial Narrow", Arial, sans-serif;
+
+// —— Semantic theme tokens ——
+$submit-color: $brand-teal;
+$accent-theme: $brand-champagne;
 $main-margin: 10px;
-//$line-theme: #eed7b5;
-//$line-theme: #f5f5f5;
-$line-theme: #000000;
-$sky-theme: #EBB018;
-//$slate-theme: #055160;
-$slate-theme: #001b2d;
-$stone-theme: #9997A6;
-//$back-color: #ebd3b1
-$back-color: #f5f5f5
+$line-theme: $brand-black;
+$sky-theme: $brand-teal;
+$slate-theme: $nav-surface;
+$stone-theme: $brand-sage;
+$back-color: $brand-cloud;
+$border-color: $brand-cool-gray;
+$surface-muted: $brand-sage;

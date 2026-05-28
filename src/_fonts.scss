@@ -1,0 +1,24 @@
+// Eurostile: uses locally installed fonts when available.
+// To bundle web fonts, add Eurostile-Regular.woff2 and Eurostile-Bold.woff2 to src/assets/fonts/
+// and uncomment the url() lines below.
+@font-face {
+  font-family: "Eurostile";
+  src:
+    local("Eurostile"),
+    local("Eurostile Regular");
+    // url("./assets/fonts/Eurostile-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Eurostile";
+  src:
+    local("Eurostile Bold"),
+    local("Eurostile-Bold");
+    // url("./assets/fonts/Eurostile-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
