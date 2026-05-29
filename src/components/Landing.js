@@ -481,7 +481,7 @@ const Landing = ({idleCountParam}) => {
                     <span className={classes.selectArrow}>▼</span>
                   </div>
                 ) : (
-                  <span>{defaultGroup}</span>
+                  <span>{logoKey}</span>
                 )}
               </div>
               {renderButtons()}
