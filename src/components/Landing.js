@@ -37,6 +37,15 @@ const isMobileDevice = () => {
   return /Mobi|Android/i.test(navigator.userAgent);
 };
 
+// Tableau exposes no filter hierarchy, so the cascade order is hardcoded here.
+// Each filter is revealed only after the previous one has a selection applied.
+const FILTER_ORDER = ["Category", "Location Type", "Location", "Year"];
+
+const orderFilters = (filters) =>
+  FILTER_ORDER
+    .map((name) => (filters || []).find((f) => f.fieldName === name))
+    .filter(Boolean);
+
 const Landing = ({idleCountParam}) => {
 
     const currentNav = Object.entries(JSON.parse(localStorage.getItem("navigation")));
@@ -118,6 +127,10 @@ const Landing = ({idleCountParam}) => {
     const [currentLinks, setCurrentLinks] = useState(links);
     const [currentIds, setCurrentIds] = useState(dashboardids);
 
+    const [dashboardFilters, setDashboardFilters] = useState([]);
+    const [filterSelections, setFilterSelections] = useState({});
+    const [filterBusy, setFilterBusy] = useState(false);
+
     const [refreshSpin, setRefreshSpin] = useState(false);
     const [subscriptions, setSubscriptions] = useState({});
     const [subscriptionCheck, setSubscriptionCheck] = useState(false);
@@ -133,6 +146,7 @@ const Landing = ({idleCountParam}) => {
     //const [dashboardRef, setDashboardRef] = useState(undefined)
     const dashboardRef = useRef(null)
     const sidebarRef = useRef(null);
+    const vizRef = useRef(null);
 
     const validUserContext = useContext(ValidUserContext);
 
@@ -332,12 +346,182 @@ const Landing = ({idleCountParam}) => {
       }
     }
 
+    // Pull the categorical filters (and their currently relevant options) off the
+    // live Tableau viz. Re-running this after a selection gives the narrowed-down
+    // options for the next filter in the cascade.
+    const extractFiltersFromViz = async (viz) => {
+      const activeSheet = viz.workbook.activeSheet;
+      const worksheets = activeSheet.sheetType === "dashboard"
+        ? activeSheet.worksheets
+        : [activeSheet];
+
+      const filterMap = {};
+      for (const worksheet of worksheets) {
+        const worksheetFilters = await worksheet.getFiltersAsync();
+        for (const filter of worksheetFilters) {
+          if (filter.filterType !== "categorical") {
+            continue;
+          }
+          const key = filter.fieldName;
+          const appliedValues = (filter.appliedValues || []).map(
+            (v) => v.formattedValue ?? v.value
+          );
+          if (!filterMap[key]) {
+            let values = [];
+            try {
+              const domain = await filter.getDomainAsync("relevant");
+              values = (domain.values || []).map((v) => v.formattedValue ?? v.value);
+            } catch (domainError) {
+              values = appliedValues;
+            }
+            filterMap[key] = {
+              fieldName: filter.fieldName,
+              worksheetNames: [worksheet.name],
+              values,
+              appliedValues,
+              isAllSelected: !!filter.isAllSelected,
+            };
+          } else if (!filterMap[key].worksheetNames.includes(worksheet.name)) {
+            filterMap[key].worksheetNames.push(worksheet.name);
+          }
+        }
+      }
+      return Object.values(filterMap);
+    };
+
+    const applyFilterValue = async (viz, filter, value) => {
+      const activeSheet = viz.workbook.activeSheet;
+      const worksheets = activeSheet.sheetType === "dashboard"
+        ? activeSheet.worksheets
+        : [activeSheet];
+      for (const worksheet of worksheets) {
+        if (!filter.worksheetNames.includes(worksheet.name)) {
+          continue;
+        }
+        if (value === "__ALL__") {
+          await worksheet.clearFilterAsync(filter.fieldName);
+        } else {
+          await worksheet.applyFilterAsync(filter.fieldName, [value], "replace");
+        }
+      }
+    };
+
+    // Called by Dashboard once the Tableau viz fires "firstinteractive".
+    const handleDashboardReady = async (viz) => {
+      vizRef.current = viz;
+      try {
+        const filters = await extractFiltersFromViz(viz);
+        setDashboardFilters(filters);
+        setFilterSelections({});
+      } catch (error) {
+        console.error("Error extracting dashboard filters:", error);
+        setDashboardFilters([]);
+      }
+    };
+
+    const handleFilterChange = async (filter, value, index) => {
+      if (filterBusy) {
+        return;
+      }
+      validUserContext.localAuthCheck(false);
+      const viz = vizRef.current;
+      if (!viz) {
+        return;
+      }
+      setFilterBusy(true);
+      try {
+        await applyFilterValue(viz, filter, value);
+
+        // Changing a filter invalidates everything further down the cascade, so
+        // clear those selections both on the viz and in our local state.
+        const ordered = orderFilters(dashboardFilters);
+        const downstream = ordered.slice(index + 1);
+        for (const downstreamFilter of downstream) {
+          await applyFilterValue(viz, downstreamFilter, "__ALL__");
+        }
+
+        setFilterSelections((prev) => {
+          const next = { ...prev, [filter.fieldName]: value };
+          downstream.forEach((downstreamFilter) => {
+            delete next[downstreamFilter.fieldName];
+          });
+          return next;
+        });
+
+        // Re-extract so the next filter shows options relevant to this selection.
+        const refreshed = await extractFiltersFromViz(viz);
+        setDashboardFilters(refreshed);
+      } catch (error) {
+        console.error("Error applying dashboard filter:", error);
+      } finally {
+        setFilterBusy(false);
+      }
+    };
+
+    // Clicking a collapsed (already-selected) filter jumps back to that step:
+    // it clears that filter and everything downstream, so the list re-expands.
+    const handleReopenFilter = async (filter, index) => {
+      if (filterBusy) {
+        return;
+      }
+      validUserContext.localAuthCheck(false);
+      const viz = vizRef.current;
+      if (!viz) {
+        return;
+      }
+      setFilterBusy(true);
+      try {
+        const ordered = orderFilters(dashboardFilters);
+        const fromHere = ordered.slice(index);
+        for (const clearedFilter of fromHere) {
+          await applyFilterValue(viz, clearedFilter, "__ALL__");
+        }
+
+        setFilterSelections((prev) => {
+          const next = { ...prev };
+          fromHere.forEach((clearedFilter) => {
+            delete next[clearedFilter.fieldName];
+          });
+          return next;
+        });
+
+        const refreshed = await extractFiltersFromViz(viz);
+        setDashboardFilters(refreshed);
+      } catch (error) {
+        console.error("Error reopening dashboard filter:", error);
+      } finally {
+        setFilterBusy(false);
+      }
+    };
+
+    const handleClearFilters = async () => {
+      const viz = vizRef.current;
+      if (!viz || filterBusy) {
+        return;
+      }
+      validUserContext.localAuthCheck(false);
+      setFilterBusy(true);
+      try {
+        // Revert the workbook to its published state, i.e. load from scratch.
+        await viz.workbook.revertAllAsync();
+        const refreshed = await extractFiltersFromViz(viz);
+        setDashboardFilters(refreshed);
+        setFilterSelections({});
+      } catch (error) {
+        console.error("Error clearing dashboard filters:", error);
+      } finally {
+        setFilterBusy(false);
+      }
+    };
+
     const handleButtonClick = (tabIndex, tabText) => {
       validUserContext.localAuthCheck(false);
       setActiveButton(tabIndex);
       setActiveURL(currentLinks[tabIndex])
       setActiveDashboard(true)
       setActiveDashboardId(currentIds[tabIndex])
+      setDashboardFilters([])
+      setFilterSelections({})
       setDefaultFolder('Home')
       setDisplayTabs(false)
       if (isMobileDevice() ){
@@ -408,7 +592,7 @@ const Landing = ({idleCountParam}) => {
     const renderDashboard = () => {
       return (
         <div>
-            <Dashboard dashboardLinkProp={activeURL} displayTabs={displayTabs} idleCount={idleCount}></Dashboard>
+            <Dashboard dashboardLinkProp={activeURL} displayTabs={displayTabs} idleCount={idleCount} onDashboardReady={handleDashboardReady}></Dashboard>
         </div>
       )
     };
@@ -423,6 +607,8 @@ const Landing = ({idleCountParam}) => {
       var links = flatNav.map(n => n.link);
       var dashboardids = flatNav.map(n => n.id);
 
+      setDashboardFilters([])
+      setFilterSelections({})
       setDefaultGroup(event);
       setCurrentButtons(buttons);
       setCurrentLinks(links);
@@ -442,6 +628,71 @@ const Landing = ({idleCountParam}) => {
         }
       });
     };
+    const renderFilters = () => {
+      const orderedFilters = orderFilters(dashboardFilters);
+      if (orderedFilters.length === 0) {
+        return null;
+      }
+      // The active filter is the first one in the cascade without a selection.
+      // Everything before it is "completed" and collapses to its chosen value;
+      // everything after it stays hidden until its turn.
+      const activeIndex = orderedFilters.findIndex(
+        (filter) => filterSelections[filter.fieldName] === undefined
+      );
+
+      return (
+        <div className={classes.filterSection}>
+          <div className={classes.filterSectionHeader}>
+            <span className={classes.filterSectionTitle}>Filters</span>
+            <span className={classes.filterClear} onClick={handleClearFilters}>
+              Clear
+            </span>
+          </div>
+          {orderedFilters.map((filter, index) => {
+            const selected = filterSelections[filter.fieldName];
+
+            if (selected !== undefined) {
+              return (
+                <div className={classes.filterGroup} key={filter.fieldName}>
+                  <label className={classes.filterLabel}>{filter.fieldName}</label>
+                  <div className={classes.filterOptionList}>
+                    <div
+                      className={`${classes.filterOption} ${classes.filterOptionSelected} ${filterBusy ? classes.filterOptionDisabled : ''}`}
+                      onClick={() => handleReopenFilter(filter, index)}
+                      title="Change this selection"
+                    >
+                      {selected}
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            if (index !== activeIndex) {
+              return null;
+            }
+
+            return (
+              <div className={classes.filterGroup} key={filter.fieldName}>
+                <label className={classes.filterLabel}>{filter.fieldName}</label>
+                <div className={classes.filterOptionList}>
+                  {filter.values.map((value, valueIndex) => (
+                    <div
+                      key={valueIndex}
+                      className={`${classes.filterOption} ${filterBusy ? classes.filterOptionDisabled : ''}`}
+                      onClick={() => handleFilterChange(filter, value, index)}
+                    >
+                      {value}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      );
+    };
+
     var randomNumber = Math.floor(Math.random() * 1000000);
 
 
@@ -485,6 +736,7 @@ const Landing = ({idleCountParam}) => {
                 )}
               </div>
               {renderButtons()}
+              {renderFilters()}
             </div>
             <div className={classes.sidebarBrand}>
                 <img src={bpLogoWhite} className={classes.sidebarBrandLogo} alt="Bradley Payne" />
@@ -586,6 +838,7 @@ const Landing = ({idleCountParam}) => {
                     </div>                  
                     {/* <div className={`${classes.sideState}`}>{defaultGroup}</div> */}
                     {renderButtons()}
+                    {renderFilters()}
                   </div> 
                   <div className={classes.sidebarBrand}>
                       <img src={bpLogoWhite} className={classes.sidebarBrandLogo} alt="Bradley Payne" />

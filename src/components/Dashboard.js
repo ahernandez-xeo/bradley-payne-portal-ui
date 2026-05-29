@@ -7,7 +7,7 @@ import classesSpin from "../App.module.scss";
 
 
 
-const Dashboard = ({dashboardLinkProp, displayTabs}) => {
+const Dashboard = ({dashboardLinkProp, displayTabs, onDashboardReady}) => {
     const [activeTab, setActiveTab] = useState(0);
     const [loaded, setLoaded] = useState(false);
 
@@ -80,6 +80,9 @@ const Dashboard = ({dashboardLinkProp, displayTabs}) => {
             setLoaded(true);
             setActiveTab(activeTabIndex);
             viz.refreshDataAsync()
+            if (onDashboardReady) {
+              onDashboardReady(viz);
+            }
         });
         // viz.addEventListener("tabswitched", async (event) => {
         //     setActiveTab(tabArray.indexOf(event.detail.newSheetName))

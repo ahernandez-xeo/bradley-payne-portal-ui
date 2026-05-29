@@ -554,6 +554,11 @@
   border-color: $accent-theme;
 }
 
+.selectDropdown:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
 .selectArrow {
   position: absolute;
   top: 50%;
@@ -567,4 +572,111 @@
   position: relative;
   width: 100%;
   margin-top: 8px;
+}
+
+.filterSection {
+  padding: 12px;
+  border-bottom: 1px solid $nav-divider;
+  box-sizing: border-box;
+}
+
+.filterSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.filterSectionTitle {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: $nav-label;
+  text-align: left;
+}
+
+.filterClear {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: $nav-text;
+  cursor: pointer;
+  transition: color 0.15s;
+
+  &:hover {
+    color: $accent-theme;
+  }
+}
+
+.filterGroup {
+  position: relative;
+  text-align: left;
+  margin-bottom: 12px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.filterLabel {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: $nav-text;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.filterOptionList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.filterOption {
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: $nav-text;
+  background-color: rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  &:hover {
+    background-color: $nav-hover-bg;
+    color: $nav-text-strong;
+    border-color: $nav-active-border;
+  }
+}
+
+.filterOptionSelected {
+  background-color: $nav-active-bg;
+  border-color: $nav-active;
+  color: $nav-active;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:hover {
+    background-color: $nav-hover-bg;
+    color: $nav-active;
+    border-color: $nav-active;
+  }
+}
+
+.filterOptionDisabled {
+  opacity: 0.6;
+  cursor: progress;
+  pointer-events: none;
 }
