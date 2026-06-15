@@ -39,7 +39,7 @@ const isMobileDevice = () => {
 
 // Tableau exposes no filter hierarchy, so the cascade order is hardcoded here.
 // Each filter is revealed only after the previous one has a selection applied.
-const FILTER_ORDER = ["Category", "Location Type", "Location", "Year"];
+const FILTER_ORDER = ["Category", "Location Type", "Location"];
 
 const orderFilters = (filters) =>
   FILTER_ORDER
@@ -356,6 +356,8 @@ const Landing = ({idleCountParam}) => {
         : [activeSheet];
 
       const filterMap = {};
+      console.log("Extract filters from viz.");
+
       for (const worksheet of worksheets) {
         const worksheetFilters = await worksheet.getFiltersAsync();
         for (const filter of worksheetFilters) {
@@ -621,11 +623,18 @@ const Landing = ({idleCountParam}) => {
     
     const renderButtons = () => {  
       return currentButtons.map((buttonText, index) => {
-        if (activeButton === index) {
-            return (<div className={`${classes.sideButton} ${classes.active}`} onClick={() => handleButtonClick(index, buttonText)}>{buttonText.replace(/^\d+\.\s*/, '')}</div>)
-        } else {
-            return (<div className={`${classes.sideButton}`} onClick={() => handleButtonClick(index, buttonText)}>{buttonText.replace(/^\d+\.\s*/, '')}</div>)
-        }
+        const isActive = activeButton === index;
+        return (
+          <div key={index}>
+            <div
+              className={`${classes.sideButton} ${isActive ? classes.active : ''}`}
+              onClick={() => handleButtonClick(index, buttonText)}
+            >
+              {buttonText.replace(/^\d+\.\s*/, '')}
+            </div>
+            {isActive && activeDashboard && renderFilters()}
+          </div>
+        );
       });
     };
     const renderFilters = () => {
@@ -736,7 +745,6 @@ const Landing = ({idleCountParam}) => {
                 )}
               </div>
               {renderButtons()}
-              {renderFilters()}
             </div>
             <div className={classes.sidebarBrand}>
                 <img src={bpLogoWhite} className={classes.sidebarBrandLogo} alt="Bradley Payne" />
@@ -838,7 +846,6 @@ const Landing = ({idleCountParam}) => {
                     </div>                  
                     {/* <div className={`${classes.sideState}`}>{defaultGroup}</div> */}
                     {renderButtons()}
-                    {renderFilters()}
                   </div> 
                   <div className={classes.sidebarBrand}>
                       <img src={bpLogoWhite} className={classes.sidebarBrandLogo} alt="Bradley Payne" />
