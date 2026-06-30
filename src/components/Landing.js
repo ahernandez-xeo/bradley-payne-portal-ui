@@ -46,6 +46,54 @@ const orderFilters = (filters) =>
     .map((name) => (filters || []).find((f) => f.fieldName === name))
     .filter(Boolean);
 
+// Extracted filters are cached per dashboard AND per selection path, so every
+// level of the cascade (not just the first) can be shown instantly from cache
+// while a fresh extraction runs in the background.
+const FILTER_CACHE_KEY = "dashboard_filter_cache";
+
+// Stable signature for the current cascade selections, e.g. "Category=A|Location=B".
+const makeSelectionKey = (selections) =>
+  FILTER_ORDER
+    .filter((name) => selections && selections[name] !== undefined)
+    .map((name) => `${name}=${selections[name]}`)
+    .join("|");
+
+const readFilterCache = () => {
+  try {
+    return JSON.parse(localStorage.getItem(FILTER_CACHE_KEY)) || {};
+  } catch (error) {
+    return {};
+  }
+};
+
+const getCachedFilters = (dashboardKey, selectionKey = "") => {
+  if (!dashboardKey) {
+    return [];
+  }
+  const cache = readFilterCache();
+  const entry = cache[dashboardKey];
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+    return [];
+  }
+  return Array.isArray(entry[selectionKey]) ? entry[selectionKey] : [];
+};
+
+const setCachedFilters = (dashboardKey, selectionKey, filters) => {
+  if (!dashboardKey) {
+    return;
+  }
+  try {
+    const cache = readFilterCache();
+    if (!cache[dashboardKey] || typeof cache[dashboardKey] !== "object" || Array.isArray(cache[dashboardKey])) {
+      cache[dashboardKey] = {};
+    }
+    cache[dashboardKey][selectionKey] = filters;
+    localStorage.setItem(FILTER_CACHE_KEY, JSON.stringify(cache));
+  } catch (error) {
+    // Ignore serialization / quota errors – caching is best-effort.
+  }
+};
+
 const Landing = ({idleCountParam}) => {
 
     const currentNav = Object.entries(JSON.parse(localStorage.getItem("navigation")));
@@ -127,9 +175,9 @@ const Landing = ({idleCountParam}) => {
     const [currentLinks, setCurrentLinks] = useState(links);
     const [currentIds, setCurrentIds] = useState(dashboardids);
 
-    const [dashboardFilters, setDashboardFilters] = useState([]);
+    const [dashboardFilters, setDashboardFilters] = useState(() => getCachedFilters(links[0]));
     const [filterSelections, setFilterSelections] = useState({});
-    const [filterBusy, setFilterBusy] = useState(false);
+    const [vizReady, setVizReady] = useState(false);
 
     const [refreshSpin, setRefreshSpin] = useState(false);
     const [subscriptions, setSubscriptions] = useState({});
@@ -147,6 +195,21 @@ const Landing = ({idleCountParam}) => {
     const dashboardRef = useRef(null)
     const sidebarRef = useRef(null);
     const vizRef = useRef(null);
+    // Holds the current dashboard link so the (once-registered) viz ready
+    // callback always caches against the dashboard actually being shown.
+    const activeURLRef = useRef(links[0]);
+    // Monotonic token for filter operations. Background refreshes capture the
+    // token at start and only update the visible list if they're still the
+    // latest, preventing stale extractions from clobbering the current view.
+    const filterOpSeqRef = useRef(0);
+    // Serializes all Tableau viz mutations (applyFilter/clear/revert + extract)
+    // so they run in order in the background without blocking the (cache-driven)
+    // UI updates.
+    const vizOpChainRef = useRef(Promise.resolve());
+
+    useEffect(() => {
+      activeURLRef.current = activeURL;
+    }, [activeURL]);
 
     const validUserContext = useContext(ValidUserContext);
 
@@ -368,23 +431,41 @@ const Landing = ({idleCountParam}) => {
           const appliedValues = (filter.appliedValues || []).map(
             (v) => v.formattedValue ?? v.value
           );
-          if (!filterMap[key]) {
-            let values = [];
+
+          const fetchFilterValues = async () => {
             try {
               const domain = await filter.getDomainAsync("relevant");
-              values = (domain.values || []).map((v) => v.formattedValue ?? v.value);
+              // const domain = await filter.getDomainAsync("database");
+
+              return (domain.values || []).map((v) => v.formattedValue ?? v.value);
             } catch (domainError) {
-              values = appliedValues;
+              return appliedValues;
             }
+          };
+
+          if (!filterMap[key]) {
             filterMap[key] = {
               fieldName: filter.fieldName,
               worksheetNames: [worksheet.name],
-              values,
+              values: await fetchFilterValues(),
               appliedValues,
               isAllSelected: !!filter.isAllSelected,
             };
-          } else if (!filterMap[key].worksheetNames.includes(worksheet.name)) {
-            filterMap[key].worksheetNames.push(worksheet.name);
+          } else {
+            if (!filterMap[key].worksheetNames.includes(worksheet.name)) {
+              filterMap[key].worksheetNames.push(worksheet.name);
+            }
+            // A previous worksheet's copy of this filter may have returned no
+            // values; retry the domain fetch from this worksheet's filter.
+            if (filterMap[key].values.length === 0) {
+              const retriedValues = await fetchFilterValues();
+              if (retriedValues.length > 0) {
+                filterMap[key].values = retriedValues;
+                if (appliedValues.length > 0) {
+                  filterMap[key].appliedValues = appliedValues;
+                }
+              }
+            }
           }
         }
       }
@@ -408,112 +489,142 @@ const Landing = ({idleCountParam}) => {
       }
     };
 
-    // Called by Dashboard once the Tableau viz fires "firstinteractive".
-    const handleDashboardReady = async (viz) => {
-      vizRef.current = viz;
-      try {
-        const filters = await extractFiltersFromViz(viz);
-        setDashboardFilters(filters);
-        setFilterSelections({});
-      } catch (error) {
-        console.error("Error extracting dashboard filters:", error);
-        setDashboardFilters([]);
+    // Show cached filters for a given selection path immediately (if any).
+    const showCachedFor = (dashboardKey, selections) => {
+      const cached = getCachedFilters(dashboardKey, makeSelectionKey(selections));
+      if (cached.length > 0) {
+        setDashboardFilters(cached);
+      }
+      return cached;
+    };
+
+    // Queue a viz mutation so all Tableau operations run strictly in order, even
+    // though the UI has already advanced optimistically from cache.
+    const enqueueVizOp = (op) => {
+      const next = vizOpChainRef.current.then(op).catch((error) => {
+        console.error("Error in queued viz operation:", error);
+      });
+      vizOpChainRef.current = next;
+      return next;
+    };
+
+    // Extract the live values for a selection path and cache them. Because viz
+    // ops are serialized, the viz reflects exactly this path when we run, so the
+    // result is always the correct value to cache. We only repaint the visible
+    // list if this is still the latest operation and we're on the same dashboard.
+    const backgroundRefresh = async (viz, dashboardKey, selections, seq) => {
+      const fresh = await extractFiltersFromViz(viz);
+      if (fresh.length === 0) {
+        return;
+      }
+      setCachedFilters(dashboardKey, makeSelectionKey(selections), fresh);
+      if (seq === filterOpSeqRef.current && activeURLRef.current === dashboardKey) {
+        setDashboardFilters(fresh);
       }
     };
 
-    const handleFilterChange = async (filter, value, index) => {
-      if (filterBusy) {
+    // Called by Dashboard once the Tableau viz fires "firstinteractive".
+    // Shows cached first-level filters immediately, then refreshes in background.
+    const handleDashboardReady = (viz) => {
+      vizRef.current = viz;
+      const dashboardKey = activeURLRef.current;
+      const seq = ++filterOpSeqRef.current;
+      setFilterSelections({});
+      showCachedFor(dashboardKey, {});
+
+      // The viz is interactive now (this fires on "firstinteractive"), so cached
+      // filters are immediately usable while the fresh extraction runs.
+      setVizReady(true);
+      enqueueVizOp(() => backgroundRefresh(viz, dashboardKey, {}, seq));
+    };
+
+    const handleFilterChange = (filter, value, index) => {
+      if (!vizReady) {
         return;
       }
-      validUserContext.localAuthCheck(false);
       const viz = vizRef.current;
       if (!viz) {
         return;
       }
-      setFilterBusy(true);
-      try {
-        await applyFilterValue(viz, filter, value);
+      validUserContext.localAuthCheck(false);
+      const dashboardKey = activeURLRef.current;
 
-        // Changing a filter invalidates everything further down the cascade, so
-        // clear those selections both on the viz and in our local state.
-        const ordered = orderFilters(dashboardFilters);
-        const downstream = ordered.slice(index + 1);
+      // Work out the new selection path up front so we can update the UI now.
+      const ordered = orderFilters(dashboardFilters);
+      const downstream = ordered.slice(index + 1);
+      const newSelections = { ...filterSelections, [filter.fieldName]: value };
+      downstream.forEach((downstreamFilter) => {
+        delete newSelections[downstreamFilter.fieldName];
+      });
+
+      // Optimistic, instant UI: advance the cascade and show the next level from
+      // cache right away (no waiting on the Tableau apply call).
+      const seq = ++filterOpSeqRef.current;
+      setFilterSelections(newSelections);
+      showCachedFor(dashboardKey, newSelections);
+
+      // Apply to the viz + refresh values in the background, in order.
+      enqueueVizOp(async () => {
+        await applyFilterValue(viz, filter, value);
         for (const downstreamFilter of downstream) {
           await applyFilterValue(viz, downstreamFilter, "__ALL__");
         }
-
-        setFilterSelections((prev) => {
-          const next = { ...prev, [filter.fieldName]: value };
-          downstream.forEach((downstreamFilter) => {
-            delete next[downstreamFilter.fieldName];
-          });
-          return next;
-        });
-
-        // Re-extract so the next filter shows options relevant to this selection.
-        const refreshed = await extractFiltersFromViz(viz);
-        setDashboardFilters(refreshed);
-      } catch (error) {
-        console.error("Error applying dashboard filter:", error);
-      } finally {
-        setFilterBusy(false);
-      }
+        await backgroundRefresh(viz, dashboardKey, newSelections, seq);
+      });
     };
 
     // Clicking a collapsed (already-selected) filter jumps back to that step:
     // it clears that filter and everything downstream, so the list re-expands.
-    const handleReopenFilter = async (filter, index) => {
-      if (filterBusy) {
+    const handleReopenFilter = (filter, index) => {
+      if (!vizReady) {
         return;
       }
-      validUserContext.localAuthCheck(false);
       const viz = vizRef.current;
       if (!viz) {
         return;
       }
-      setFilterBusy(true);
-      try {
-        const ordered = orderFilters(dashboardFilters);
-        const fromHere = ordered.slice(index);
+      validUserContext.localAuthCheck(false);
+      const dashboardKey = activeURLRef.current;
+
+      const ordered = orderFilters(dashboardFilters);
+      const fromHere = ordered.slice(index);
+      const newSelections = { ...filterSelections };
+      fromHere.forEach((clearedFilter) => {
+        delete newSelections[clearedFilter.fieldName];
+      });
+
+      const seq = ++filterOpSeqRef.current;
+      setFilterSelections(newSelections);
+      showCachedFor(dashboardKey, newSelections);
+
+      enqueueVizOp(async () => {
         for (const clearedFilter of fromHere) {
           await applyFilterValue(viz, clearedFilter, "__ALL__");
         }
-
-        setFilterSelections((prev) => {
-          const next = { ...prev };
-          fromHere.forEach((clearedFilter) => {
-            delete next[clearedFilter.fieldName];
-          });
-          return next;
-        });
-
-        const refreshed = await extractFiltersFromViz(viz);
-        setDashboardFilters(refreshed);
-      } catch (error) {
-        console.error("Error reopening dashboard filter:", error);
-      } finally {
-        setFilterBusy(false);
-      }
+        await backgroundRefresh(viz, dashboardKey, newSelections, seq);
+      });
     };
 
-    const handleClearFilters = async () => {
+    const handleClearFilters = () => {
+      if (!vizReady) {
+        return;
+      }
       const viz = vizRef.current;
-      if (!viz || filterBusy) {
+      if (!viz) {
         return;
       }
       validUserContext.localAuthCheck(false);
-      setFilterBusy(true);
-      try {
+      const dashboardKey = activeURLRef.current;
+
+      const seq = ++filterOpSeqRef.current;
+      setFilterSelections({});
+      showCachedFor(dashboardKey, {});
+
+      enqueueVizOp(async () => {
         // Revert the workbook to its published state, i.e. load from scratch.
         await viz.workbook.revertAllAsync();
-        const refreshed = await extractFiltersFromViz(viz);
-        setDashboardFilters(refreshed);
-        setFilterSelections({});
-      } catch (error) {
-        console.error("Error clearing dashboard filters:", error);
-      } finally {
-        setFilterBusy(false);
-      }
+        await backgroundRefresh(viz, dashboardKey, {}, seq);
+      });
     };
 
     const handleButtonClick = (tabIndex, tabText) => {
@@ -522,7 +633,9 @@ const Landing = ({idleCountParam}) => {
       setActiveURL(currentLinks[tabIndex])
       setActiveDashboard(true)
       setActiveDashboardId(currentIds[tabIndex])
-      setDashboardFilters([])
+      setVizReady(false)
+      filterOpSeqRef.current++
+      setDashboardFilters(getCachedFilters(currentLinks[tabIndex]))
       setFilterSelections({})
       setDefaultFolder('Home')
       setDisplayTabs(false)
@@ -609,7 +722,9 @@ const Landing = ({idleCountParam}) => {
       var links = flatNav.map(n => n.link);
       var dashboardids = flatNav.map(n => n.id);
 
-      setDashboardFilters([])
+      setVizReady(false)
+      filterOpSeqRef.current++
+      setDashboardFilters(getCachedFilters(links[0]))
       setFilterSelections({})
       setDefaultGroup(event);
       setCurrentButtons(buttons);
@@ -648,12 +763,18 @@ const Landing = ({idleCountParam}) => {
       const activeIndex = orderedFilters.findIndex(
         (filter) => filterSelections[filter.fieldName] === undefined
       );
+      // Cached filters may render before the viz is interactive; block clicks
+      // until extraction has confirmed the values are live.
+      const interactionDisabled = !vizReady;
 
       return (
         <div className={classes.filterSection}>
           <div className={classes.filterSectionHeader}>
             <span className={classes.filterSectionTitle}>Filters</span>
-            <span className={classes.filterClear} onClick={handleClearFilters}>
+            <span
+              className={`${classes.filterClear} ${interactionDisabled ? classes.filterClearDisabled : ''}`}
+              onClick={handleClearFilters}
+            >
               Clear
             </span>
           </div>
@@ -666,7 +787,7 @@ const Landing = ({idleCountParam}) => {
                   <label className={classes.filterLabel}>{filter.fieldName}</label>
                   <div className={classes.filterOptionList}>
                     <div
-                      className={`${classes.filterOption} ${classes.filterOptionSelected} ${filterBusy ? classes.filterOptionDisabled : ''}`}
+                      className={`${classes.filterOption} ${classes.filterOptionSelected} ${interactionDisabled ? classes.filterOptionDisabled : ''}`}
                       onClick={() => handleReopenFilter(filter, index)}
                       title="Change this selection"
                     >
@@ -688,7 +809,7 @@ const Landing = ({idleCountParam}) => {
                   {filter.values.map((value, valueIndex) => (
                     <div
                       key={valueIndex}
-                      className={`${classes.filterOption} ${filterBusy ? classes.filterOptionDisabled : ''}`}
+                      className={`${classes.filterOption} ${interactionDisabled ? classes.filterOptionDisabled : ''}`}
                       onClick={() => handleFilterChange(filter, value, index)}
                     >
                       {value}

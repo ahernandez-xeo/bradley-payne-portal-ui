@@ -10,8 +10,8 @@
   background-color: $surface-white;
   border: 1px solid $border-color;
   border-top: 4px solid $accent-theme;
-  border-radius: 0 0 6px 6px;
-  box-shadow: 0 8px 40px $brand-purple-14;
+  border-radius: 0 0 8px 8px;
+  box-shadow: 0 8px 30px rgba(42, 48, 55, 0.1);
   padding: 32px 36px 28px;
   @include media-max-width() {
     width: 90%;
@@ -30,15 +30,15 @@ input {
   margin-top: $main-margin;
   outline: 2px solid transparent;
   outline-offset: 0;
-  color: $slate-theme;
-  background-color: $brand-ivory;
+  color: var(--text-strong);
+  background-color: $surface-muted;
   font-size: 15px;
   font-weight: 500;
   transition: border-color 0.2s, box-shadow 0.2s;
 
   &:focus {
-    border-color: $brand-aqua;
-    box-shadow: 0 0 0 3px $brand-aqua-18;
+    border-color: $accent-theme;
+    box-shadow: 0 0 0 3px $brand-teal-18;
     background-color: $surface-white;
     outline: none;
   }
@@ -49,19 +49,20 @@ input {
   font-size: 16px;
   letter-spacing: 0.5px;
   text-transform: uppercase;
-  color: #ffffff;
+  color: var(--client-accent-contrast);
   height: 45px;
-  background-color: $sky-theme;
+  background-color: $accent-theme;
   border: none;
-  border-radius: 3px;
+  border-radius: 4px;
   margin-bottom: 20px;
   font-weight: 700;
   cursor: pointer;
+  transition: background-color 0.2s;
   &:active {
     opacity: 80%;
   }
   &:hover {
-    background-color: $brand-teal-hover;
+    background-color: var(--accent-strong);
   }
 }
 
@@ -71,11 +72,11 @@ input {
   font-size: 16px;
   letter-spacing: 0.5px;
   text-transform: uppercase;
-  color: #ffffff;
+  color: $text-muted;
   height: 45px;
-  background-color: $stone-theme;
-  border: none;
-  border-radius: 3px;
+  background-color: $surface-muted;
+  border: 1px solid $border-color;
+  border-radius: 4px;
   margin-bottom: 20px;
   cursor: not-allowed;
   &:active {
@@ -92,7 +93,7 @@ input {
 .forgot {
   font-size: 12px;
   font-weight: lighter;
-  color: $slate-theme;
+  color: var(--text-body);
   margin-top: 15px;
   text-align: left;
   text-decoration: underline;
@@ -143,7 +144,7 @@ input {
   margin-top: 45px;
   font-size: 16px;
   font-weight: normal;
-  color: $slate-theme;
+  color: var(--text-body);
 }
 
 .backButton:hover {

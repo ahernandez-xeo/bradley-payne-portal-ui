@@ -41,27 +41,29 @@ $brand-aqua-18: rgba(63, 193, 181, 0.18);
 
 $brand-purple-14: rgba(82, 45, 109, 0.14);
 
-// —— Navigation (dark teal shell) tokens — built to combine with the teal OAR logo ——
-$nav-surface: $brand-teal-deep;
-$nav-text: rgba(255, 255, 255, 0.85);
-$nav-text-strong: #ffffff;
-$nav-label: rgba(255, 255, 255, 0.62);
-$nav-active: $brand-champagne;
-$nav-active-bg: rgba(255, 255, 255, 0.1);
-$nav-active-border: $brand-champagne;
-$nav-hover-bg: rgba(255, 255, 255, 0.08);
-$nav-divider: rgba(255, 255, 255, 0.1);
+// —— Navigation (light shell) tokens ——
+// These map onto the runtime CSS custom properties defined in index.scss so a
+// single `--client-accent` override re-themes the whole navigation shell.
+$nav-surface: var(--surface);
+$nav-text: var(--text-body);
+$nav-text-strong: var(--text-strong);
+$nav-label: var(--text-muted);
+$nav-active: var(--client-accent);
+$nav-active-bg: var(--accent-soft);
+$nav-active-border: var(--client-accent);
+$nav-hover-bg: var(--surface-2);
+$nav-divider: var(--divider);
 
 $font-family-base: "Eurostile", "Eurostile Extended", "Microgramma D Extended", "Bank Gothic Medium", "Arial Narrow", Arial, sans-serif;
 
-// —— Semantic theme tokens ——
-$submit-color: $brand-teal;
-$accent-theme: $brand-champagne;
+// —— Semantic theme tokens (light base) ——
+$submit-color: var(--client-accent);
+$accent-theme: var(--client-accent);
 $main-margin: 10px;
 $line-theme: $brand-black;
 $sky-theme: $brand-teal;
-$slate-theme: $nav-surface;
+$slate-theme: var(--surface);
 $stone-theme: $brand-sage;
-$back-color: $brand-cloud;
-$border-color: $brand-cool-gray;
-$surface-muted: $brand-sage;
+$back-color: var(--app-bg);
+$border-color: var(--surface-border);
+$surface-muted: var(--surface-2);

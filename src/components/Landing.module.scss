@@ -43,7 +43,7 @@
     float: right;
     margin-top: 16px;
     margin-right: 8px;
-    color: white;
+    color: $nav-text;
     font-weight: normal;
     font-size: 17px;
     font-weight: 700;
@@ -186,7 +186,7 @@
   .toolbar {
     width: 100%;
     background-color: $slate-theme;
-    border-bottom: 2px solid $brand-champagne-45;
+    border-bottom: 1px solid $border-color;
     display: flex;
     align-items: center;
     justify-content: flex-end;
@@ -251,7 +251,7 @@
     width: 240px;
     height: 100vh;
     background-color: $slate-theme;
-    border-right: 1px solid rgba(255, 255, 255, 0.07);
+    border-right: 1px solid $border-color;
     display: block;
     position: fixed!important;
     z-index: 1001;
@@ -287,7 +287,6 @@
 
   .sidebarBrandLogo {
     height: 150px;
-    filter: brightness(0) invert(1);
   }
 
   .sidebarlogo {
@@ -302,9 +301,9 @@
     height: 96px;
     border-radius: 50%;
     background-color: $surface-white;
-    border: 2px solid $brand-champagne-45;
+    border: 1px solid $border-color;
     overflow: hidden;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+    box-shadow: 0 2px 8px rgba(20, 30, 40, 0.08);
     display: inline-flex;
     position: relative;
     align-items: center;
@@ -529,14 +528,14 @@
 
 .sidebarbottom {
   height: 75px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  background-color: rgba(0, 0, 0, 0.15);
+  border-top: 1px solid $nav-divider;
+  background-color: $surface-muted;
 }
 
 .selectDropdown {
-  background-color: rgba(0, 0, 0, 0.18);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  background-color: $surface-muted;
+  color: $nav-text-strong;
+  border: 1px solid $border-color;
   border-radius: 4px;
   padding: 6px 10px;
   font-size: 15px;
@@ -566,7 +565,7 @@
   pointer-events: none;
   transform: translateY(-50%);
   font-size: 13px;
-  color: white;
+  color: $nav-label;
 }
 .selectDropdownWrapper {
   position: relative;
@@ -610,6 +609,12 @@
   }
 }
 
+.filterClearDisabled {
+  opacity: 0.5;
+  cursor: progress;
+  pointer-events: none;
+}
+
 .filterGroup {
   position: relative;
   text-align: left;
@@ -644,8 +649,8 @@
   padding: 8px 10px;
   font-size: 13px;
   color: $nav-text;
-  background-color: rgba(0, 0, 0, 0.18);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background-color: $surface-muted;
+  border: 1px solid $border-color;
   border-radius: 4px;
   box-sizing: border-box;
   cursor: pointer;

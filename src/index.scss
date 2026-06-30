@@ -1,8 +1,37 @@
 @import "variables";
 @import "fonts";
 
+// —— Theme tokens ————————————————————————————————————————————————
+// The portal ships a single light base theme. Per-client styling is done by
+// overriding just `--client-accent` (e.g. on the app root, keyed off the
+// active client). Every accent shade below is derived from it, so a single
+// color drives the active item highlight, focus rings, spinners, etc.
+:root {
+  // Client-overridable accent (defaults to the Bradley Payne teal)
+  --client-accent: #006e63;
+  --client-accent-contrast: #ffffff;
+
+  // Derived accent shades (auto-computed from --client-accent)
+  --accent-strong: color-mix(in srgb, var(--client-accent) 82%, #000000);
+  --accent-soft: color-mix(in srgb, var(--client-accent) 12%, #ffffff);
+  --accent-softer: color-mix(in srgb, var(--client-accent) 6%, #ffffff);
+  --accent-border: color-mix(in srgb, var(--client-accent) 38%, #ffffff);
+
+  // Fixed light base surfaces (shared across all clients)
+  --app-bg: #eef1f4;
+  --surface: #ffffff;
+  --surface-2: #f6f8f9;
+  --surface-border: #e3e7eb;
+  --divider: #eef1f3;
+
+  // Text
+  --text-strong: #2a3037;
+  --text-body: #4c545d;
+  --text-muted: #8b939c;
+}
+
 * {
-  color: $slate-theme;
+  color: var(--text-body);
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
@@ -14,10 +43,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
-  background-color: $brand-ivory;
-  background:
-    linear-gradient(to bottom, $brand-champagne 32vh, transparent 32vh),
-    linear-gradient(to bottom, transparent 32vh, $brand-ivory 32vh);
+  background-color: var(--app-bg);
 }
 
 b,
