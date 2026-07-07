@@ -39,7 +39,7 @@ const isMobileDevice = () => {
 
 // Tableau exposes no filter hierarchy, so the cascade order is hardcoded here.
 // Each filter is revealed only after the previous one has a selection applied.
-const FILTER_ORDER = ["Category", "Location Type", "Location"];
+const FILTER_ORDER = ["Category", "Type","Location Type", "Location"];
 
 const orderFilters = (filters) =>
   FILTER_ORDER
@@ -178,6 +178,10 @@ const Landing = ({idleCountParam}) => {
     const [dashboardFilters, setDashboardFilters] = useState(() => getCachedFilters(links[0]));
     const [filterSelections, setFilterSelections] = useState({});
     const [vizReady, setVizReady] = useState(false);
+
+    const [detailsOverlayOpen, setDetailsOverlayOpen] = useState(false);
+    // Tracks the current candidate URL while falling back through shorter paths.
+    const [detailsImageUrl, setDetailsImageUrl] = useState(null);
 
     const [refreshSpin, setRefreshSpin] = useState(false);
     const [subscriptions, setSubscriptions] = useState({});
@@ -412,16 +416,29 @@ const Landing = ({idleCountParam}) => {
     // Pull the categorical filters (and their currently relevant options) off the
     // live Tableau viz. Re-running this after a selection gives the narrowed-down
     // options for the next filter in the cascade.
+    // Only the worksheet(s) listed here are queried — narrowing this to a single
+    // reliable source is significantly faster than walking every worksheet.
+    const FILTER_SOURCE_WORKSHEETS = ["All Years (10yr)"];
+
     const extractFiltersFromViz = async (viz) => {
       const activeSheet = viz.workbook.activeSheet;
-      const worksheets = activeSheet.sheetType === "dashboard"
+      const allWorksheets = activeSheet.sheetType === "dashboard"
         ? activeSheet.worksheets
         : [activeSheet];
 
-      const filterMap = {};
-      console.log("Extract filters from viz.");
+      // Restrict to the configured source worksheet(s); fall back to all sheets
+      // only when none of the named ones are present in this dashboard.
+      const worksheets = allWorksheets.filter((ws) =>
+        FILTER_SOURCE_WORKSHEETS.includes(ws.name)
+      );
+      const effectiveWorksheets = worksheets.length > 0 ? worksheets : allWorksheets;
 
-      for (const worksheet of worksheets) {
+      const filterMap = {};
+      console.log(
+        `Extract filters from viz — using worksheet(s): ${effectiveWorksheets.map((ws) => ws.name).join(", ")}`
+      );
+
+      for (const worksheet of effectiveWorksheets) {
         const worksheetFilters = await worksheet.getFiltersAsync();
         for (const filter of worksheetFilters) {
           if (filter.filterType !== "categorical") {
@@ -469,7 +486,23 @@ const Landing = ({idleCountParam}) => {
           }
         }
       }
-      return Object.values(filterMap);
+      const result = Object.values(filterMap);
+      const activeSheetName = activeSheet.name ?? "(unknown)";
+      console.group(`[Filters] ${activeSheetName}`);
+      if (result.length === 0) {
+        console.log("No categorical filters found.");
+      } else {
+        result.forEach((f) => {
+          console.log(
+            `  ${f.fieldName}`,
+            `\n    worksheets : ${f.worksheetNames.join(", ")}`,
+            `\n    values     : ${f.values.length === 0 ? "(none)" : f.values.join(" | ")}`,
+            `\n    applied    : ${f.appliedValues.length === 0 ? "(all)" : f.appliedValues.join(" | ")}`,
+          );
+        });
+      }
+      console.groupEnd();
+      return result;
     };
 
     const applyFilterValue = async (viz, filter, value) => {
@@ -627,6 +660,48 @@ const Landing = ({idleCountParam}) => {
       });
     };
 
+    // Build the GCS details image URL from the active client + cascade selections.
+    // Segments: details/{client}/{Category}/{LocationType}/{Location}/display.jpg
+    // Only selections that have been made are included (most-specific path wins).
+    const buildDetailsUrl = (segments) => {
+      const encoded = segments.map((s) => encodeURIComponent(s)).join("/");
+      return `https://storage.googleapis.com/bp_portal_artifacts/details/${encoded}/display.jpg`;
+    };
+
+    const getDetailsCandidateSegments = () => {
+      // logoKey already resolves clientGroup → defaultGroup → "default" in the
+      // right priority order, and is the same key used for the company logo URL.
+      const client = clientGroup || defaultGroup;
+      const filterSegments = FILTER_ORDER
+        .filter((name) => filterSelections[name] !== undefined)
+        .map((name) => filterSelections[name]);
+      return [client, ...filterSegments];
+    };
+
+    const handleOpenDetails = () => {
+      const segments = getDetailsCandidateSegments();
+      setDetailsImageUrl(buildDetailsUrl(segments));
+      setDetailsOverlayOpen(true);
+    };
+
+    // Called when the image 404s; drop the last filter segment and retry.
+    const handleDetailsImageError = () => {
+      setDetailsImageUrl((current) => {
+        if (!current) {
+          return null;
+        }
+        // Decode and strip the trailing /display.jpg to get the segment list.
+        const base = "https://storage.googleapis.com/bp_portal_artifacts/details/";
+        const withoutBase = current.replace(base, "").replace("/display.jpg", "");
+        const parts = withoutBase.split("/").map(decodeURIComponent);
+        // Must keep at least [client, category] to be meaningful; otherwise give up.
+        if (parts.length <= 2) {
+          return null;
+        }
+        return buildDetailsUrl(parts.slice(0, -1));
+      });
+    };
+
     const handleButtonClick = (tabIndex, tabText) => {
       validUserContext.localAuthCheck(false);
       setActiveButton(tabIndex);
@@ -736,6 +811,52 @@ const Landing = ({idleCountParam}) => {
     };
     
     
+    const renderDetailsOverlay = () => {
+      if (!detailsOverlayOpen) {
+        return null;
+      }
+      const selectionCrumbs = FILTER_ORDER
+        .filter((name) => filterSelections[name] !== undefined)
+        .map((name) => filterSelections[name]);
+
+      return (
+        <div className={classes.detailsOverlay} onClick={() => setDetailsOverlayOpen(false)}>
+          <div className={classes.detailsModal} onClick={(e) => e.stopPropagation()}>
+            <div className={classes.detailsModalHeader}>
+              <div className={classes.detailsBreadcrumb}>
+                {[defaultGroup, ...selectionCrumbs].join(" › ")}
+              </div>
+              <button
+                className={classes.detailsCloseBtn}
+                onClick={() => setDetailsOverlayOpen(false)}
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+            <div className={classes.detailsModalBody}>
+              {detailsImageUrl ? (
+                <img
+                  className={classes.detailsImage}
+                  src={detailsImageUrl}
+                  alt="Details"
+                  onError={handleDetailsImageError}
+                />
+              ) : (
+                <div className={classes.detailsNoContent}>
+                  <div>No details available for this selection.</div>
+                  <div className={classes.detailsDebugUrl}>
+                    Last attempted URL:<br />
+                    {buildDetailsUrl(getDetailsCandidateSegments())}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    };
+
     const renderButtons = () => {  
       return currentButtons.map((buttonText, index) => {
         const isActive = activeButton === index;
@@ -837,6 +958,7 @@ const Landing = ({idleCountParam}) => {
     const renderFull = () => {
       return (
           <div className={`${classes.landing}`}>
+          {renderDetailsOverlay()}
 
             <div className={`${menuOpen ? classes.sidebar : classes.sidebarClosed} `}
                   ref={containerRef}>
@@ -881,6 +1003,23 @@ const Landing = ({idleCountParam}) => {
                 {displayToolbarButtons? 
                 (
                   <div className={classes.toolbarActions}>
+                      {filterSelections["Category"] !== undefined && (
+                        <>
+                          <button
+                            className={classes.detailsButton}
+                            onClick={handleOpenDetails}
+                            title="View details for current selection"
+                          >
+                            <svg className={classes.detailsIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="10"/>
+                              <line x1="12" y1="8" x2="12" y2="12"/>
+                              <line x1="12" y1="16" x2="12.01" y2="16"/>
+                            </svg>
+                            Details
+                          </button>
+                          <img className={classes.dividericon} src={dividerIcon} alt="" />
+                        </>
+                      )}
                       <img
                       className={classes.dividericon}
                       src={dividerIcon}
@@ -939,6 +1078,7 @@ const Landing = ({idleCountParam}) => {
     const renderMobile = () => {
       return (
             <div {...handlers} className={`${classes.landing}`}>
+                {renderDetailsOverlay()}
                 {menuOpen && <div  className={classes.overlay} />} {/* Add the overlay */}
                 <div  ref={sidebarRef} className={`${menuOpen ? classes.sidebar : classes.sidebarClosed}`}>
                   <div className={`${classes.sidebartop}`}>

@@ -1,6 +1,7 @@
 import Layout from "./components/Layout";
 import { useEffect, useRef, useContext, useState } from "react";
 import classes from "./App.module.scss";
+import oarLogo from "./assets/BP-Oar-Logo-RGB.png";
 import LoginForm from "./components/LoginForm";
 import ResetForm from "./components/ResetForm";
 import NewUserForm from "./components/NewUserForm";
@@ -103,6 +104,7 @@ function App() {
       }
       <LoginHead />
       {form}
+      <img className={classes.loginFooterLogo} src={oarLogo} alt="OAR — Forward Together" />
     </Layout>
   );
 }

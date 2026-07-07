@@ -8,13 +8,18 @@
 }
 
 .loginLogo {
-  width: 350px;
+  width: 320px;
   cursor: pointer;
+  margin-bottom: 30px;
+  margin-top: 50px;
+  @include media-max-width() {
+    width: 80vw;
+  }
 }
 
 .tagline {
-  margin-top: -65px;
-  font-size: 14px;
+  margin-top: 4px;
+  font-size: 13px;
   font-weight: 400;
   letter-spacing: 3px;
   text-transform: uppercase;

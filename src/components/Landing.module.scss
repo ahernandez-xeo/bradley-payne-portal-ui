@@ -685,3 +685,132 @@
   cursor: progress;
   pointer-events: none;
 }
+
+// ── Details button (toolbar) ────────────────────────────────────────────────
+
+.detailsButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 12px;
+  background-color: $accent-theme;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  margin-right: 4px;
+  transition: background-color 0.15s;
+
+  &:hover {
+    background-color: var(--accent-strong);
+  }
+}
+
+.detailsIcon {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+// ── Details overlay ─────────────────────────────────────────────────────────
+
+.detailsOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.detailsModal {
+  background: $surface-white;
+  border-radius: 8px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  max-width: min(900px, 100%);
+  max-height: 90vh;
+  width: 100%;
+  overflow: hidden;
+}
+
+.detailsModalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid $border-color;
+  flex-shrink: 0;
+  background-color: $surface-muted;
+}
+
+.detailsBreadcrumb {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-body);
+  letter-spacing: 0.2px;
+}
+
+.detailsCloseBtn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background-color 0.15s, color 0.15s;
+
+  &:hover {
+    background-color: $border-color;
+    color: var(--text-strong);
+  }
+}
+
+.detailsModalBody {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background-color: $back-color;
+}
+
+.detailsImage {
+  max-width: 100%;
+  max-height: calc(90vh - 90px);
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.detailsNoContent {
+  font-size: 14px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.detailsDebugUrl {
+  margin-top: 14px;
+  font-size: 11px;
+  font-family: monospace;
+  color: var(--text-muted);
+  word-break: break-all;
+  background: $surface-muted;
+  border: 1px solid $border-color;
+  border-radius: 4px;
+  padding: 8px 12px;
+  line-height: 1.6;
+  text-align: left;
+}
