@@ -187,11 +187,14 @@
     width: 100%;
     background-color: $slate-theme;
     border-bottom: 1px solid $border-color;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    height:60px;
+    height: 60px;
     box-sizing: border-box;
+    position: relative;
+    z-index: 10;
   }
 
   .toolbarActions {
@@ -241,7 +244,7 @@
     width: 100%;
     fill: black;
     display: inline-block;
-    height: calc(100vh - 52px);
+    height: calc(100vh - 112px); // 60px toolbar + 52px context bar
     background-color: $back-color;
     overflow: auto;
     // border-top-left-radius: 1%;
@@ -276,17 +279,17 @@
   }
 
   .sidebarBrand {
-    height: 70px;
+    height: 56px;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 0 20px;
     flex-shrink: 0;
-    margin-top: 40px;
+    margin-top: 16px;
   }
 
   .sidebarBrandLogo {
-    height: 150px;
+    height: 120px;
   }
 
   .sidebarlogo {
@@ -360,14 +363,14 @@
     height: 42px;
     width: 100%;
     text-align: left;
-    padding-left: 20px;
+    padding-left: 18px;
     line-height: 42px;
     font-weight: 400;
     font-size: 14px;
     letter-spacing: 0.2px;
     background-color: transparent;
     border: none;
-    border-left: 3px solid transparent;
+    border-left: 4px solid transparent;
     border-bottom: 1px solid $nav-divider;
     margin: 0;
     overflow: hidden;
@@ -392,7 +395,7 @@
 
   .sideButton.active {
     background-color: $nav-active-bg;
-    border-left-color: $nav-active;
+    border-left-color: var(--client-accent, $nav-active);
     color: $nav-active;
     font-weight: 700;
   }
@@ -684,6 +687,158 @@
   opacity: 0.6;
   cursor: progress;
   pointer-events: none;
+}
+
+// ── Sidebar filter summary chip ─────────────────────────────────────────────
+
+.filterSummaryChip {
+  width: 100%;
+  padding: 4px 20px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: $nav-active;
+  background-color: $nav-active-bg;
+  border-left: 3px solid $nav-active;
+  border-bottom: 1px solid $nav-divider;
+  box-sizing: border-box;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.1px;
+}
+
+// ── Context bar (above the viz) ─────────────────────────────────────────────
+
+.contextBar {
+  width: 100%;
+  background-color: $surface-white;
+  border-bottom: 1px solid $border-color;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  box-sizing: border-box;
+  height: 52px;
+  flex-shrink: 0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.contextBarFilters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  overflow: hidden;
+}
+
+.contextBarItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.contextBarLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: $nav-label;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.contextBarSelectWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.contextBarSelect {
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: $surface-muted;
+  border: 1px solid $border-color;
+  border-radius: 5px;
+  padding: 4px 28px 4px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-strong);
+  cursor: pointer;
+  height: 32px;
+  min-width: 140px;
+  max-width: 220px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+
+  &:focus {
+    outline: none;
+    border-color: $accent-theme;
+    box-shadow: 0 0 0 3px $brand-teal-18;
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+}
+
+.contextBarSelectLocked {
+  opacity: 0.45;
+}
+
+.contextBarArrow {
+  position: absolute;
+  right: 8px;
+  pointer-events: none;
+  font-size: 12px;
+  color: $nav-label;
+  line-height: 1;
+}
+
+.contextBarClear {
+  flex-shrink: 0;
+  margin-left: 12px;
+  background: none;
+  border: 1px solid $border-color;
+  border-radius: 5px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: $nav-text;
+  cursor: pointer;
+  height: 32px;
+  transition: border-color 0.15s, color 0.15s;
+
+  &:hover {
+    border-color: $accent-theme;
+    color: $accent-theme;
+  }
+}
+
+.contextBarClearDisabled {
+  opacity: 0.45;
+  cursor: progress;
+  pointer-events: none;
+}
+
+// ── Unified toolbar icon ─────────────────────────────────────────────────────
+
+.toolbarIcon {
+  cursor: pointer;
+  height: 26px;
+  margin-right: 4px;
+  opacity: 0.82;
+  transition: opacity 0.15s;
+
+  &:hover {
+    opacity: 1;
+  }
+}
+
+.toolbarIconRefresh {
+  margin-right: 14px;
 }
 
 // ── Details button (toolbar) ────────────────────────────────────────────────

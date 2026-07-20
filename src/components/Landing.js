@@ -860,6 +860,13 @@ const Landing = ({idleCountParam}) => {
     const renderButtons = () => {  
       return currentButtons.map((buttonText, index) => {
         const isActive = activeButton === index;
+        const selectionSummary = isActive && activeDashboard
+          ? FILTER_ORDER
+              .filter((name) => filterSelections[name] !== undefined)
+              .map((name) => filterSelections[name])
+              .join(' · ')
+          : '';
+
         return (
           <div key={index}>
             <div
@@ -868,78 +875,72 @@ const Landing = ({idleCountParam}) => {
             >
               {buttonText.replace(/^\d+\.\s*/, '')}
             </div>
-            {isActive && activeDashboard && renderFilters()}
+            {selectionSummary ? (
+              <div className={classes.filterSummaryChip}>{selectionSummary}</div>
+            ) : null}
           </div>
         );
       });
     };
-    const renderFilters = () => {
+
+    // Context bar: inline cascade dropdowns rendered above the viz.
+    // Each dropdown is disabled until the previous filter in the cascade has
+    // a value — preserving the cascade logic without blocking the view.
+    const renderContextBar = () => {
       const orderedFilters = orderFilters(dashboardFilters);
-      if (orderedFilters.length === 0) {
+      if (orderedFilters.length === 0 || !activeDashboard) {
         return null;
       }
-      // The active filter is the first one in the cascade without a selection.
-      // Everything before it is "completed" and collapses to its chosen value;
-      // everything after it stays hidden until its turn.
+      const interactionDisabled = !vizReady;
       const activeIndex = orderedFilters.findIndex(
         (filter) => filterSelections[filter.fieldName] === undefined
       );
-      // Cached filters may render before the viz is interactive; block clicks
-      // until extraction has confirmed the values are live.
-      const interactionDisabled = !vizReady;
+      const hasAnySelection = activeIndex > 0 || activeIndex === -1;
 
       return (
-        <div className={classes.filterSection}>
-          <div className={classes.filterSectionHeader}>
-            <span className={classes.filterSectionTitle}>Filters</span>
-            <span
-              className={`${classes.filterClear} ${interactionDisabled ? classes.filterClearDisabled : ''}`}
-              onClick={handleClearFilters}
-            >
-              Clear
-            </span>
-          </div>
-          {orderedFilters.map((filter, index) => {
-            const selected = filterSelections[filter.fieldName];
-
-            if (selected !== undefined) {
+        <div className={classes.contextBar}>
+          <div className={classes.contextBarFilters}>
+            {orderedFilters.map((filter, index) => {
+              const selected = filterSelections[filter.fieldName] ?? '';
+              // A filter is unlocked if it is the first one OR all filters before it have values.
+              const locked = index > activeIndex && activeIndex !== -1;
               return (
-                <div className={classes.filterGroup} key={filter.fieldName}>
-                  <label className={classes.filterLabel}>{filter.fieldName}</label>
-                  <div className={classes.filterOptionList}>
-                    <div
-                      className={`${classes.filterOption} ${classes.filterOptionSelected} ${interactionDisabled ? classes.filterOptionDisabled : ''}`}
-                      onClick={() => handleReopenFilter(filter, index)}
-                      title="Change this selection"
+                <div className={classes.contextBarItem} key={filter.fieldName}>
+                  <label className={classes.contextBarLabel}>{filter.fieldName}</label>
+                  <div className={classes.contextBarSelectWrapper}>
+                    <select
+                      className={`${classes.contextBarSelect} ${locked ? classes.contextBarSelectLocked : ''}`}
+                      disabled={interactionDisabled || locked}
+                      value={selected}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (!val) {
+                          handleReopenFilter(filter, index);
+                        } else {
+                          handleFilterChange(filter, val, index);
+                        }
+                      }}
                     >
-                      {selected}
-                    </div>
+                      <option value="">— All —</option>
+                      {filter.values.map((value, valueIndex) => (
+                        <option key={valueIndex} value={value}>{value}</option>
+                      ))}
+                    </select>
+                    <span className={classes.contextBarArrow}>▾</span>
                   </div>
                 </div>
               );
-            }
-
-            if (index !== activeIndex) {
-              return null;
-            }
-
-            return (
-              <div className={classes.filterGroup} key={filter.fieldName}>
-                <label className={classes.filterLabel}>{filter.fieldName}</label>
-                <div className={classes.filterOptionList}>
-                  {filter.values.map((value, valueIndex) => (
-                    <div
-                      key={valueIndex}
-                      className={`${classes.filterOption} ${interactionDisabled ? classes.filterOptionDisabled : ''}`}
-                      onClick={() => handleFilterChange(filter, value, index)}
-                    >
-                      {value}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
+            })}
+          </div>
+          {hasAnySelection && (
+            <button
+              className={`${classes.contextBarClear} ${interactionDisabled ? classes.contextBarClearDisabled : ''}`}
+              onClick={handleClearFilters}
+              disabled={interactionDisabled}
+            >
+              Clear
+            </button>
+          )}
         </div>
       );
     };
@@ -1026,25 +1027,25 @@ const Landing = ({idleCountParam}) => {
                       alt="Divider icon"
                       ></img>
                       <img
-                      className={classes.pdficon}
+                      className={classes.toolbarIcon}
                       src={pdfIcon}
                       alt="PDF icon"
                       onClick={() => handleExportPDFClick()}
                       ></img>
                       <img
-                      className={classes.pdficon}
+                      className={classes.toolbarIcon}
                       src={pngIcon}
                       alt="PNG icon"
                       onClick={() => handleExportPNGClick()}
                       ></img>
                       <img
-                      className={classes.pwrpicon}
+                      className={classes.toolbarIcon}
                       src={pwrpIcon}
                       alt="Power Point icon"
                       onClick={() => handleExportPWRPClick()}
                       ></img>
                       <img
-                      className={classes.excelicon}
+                      className={classes.toolbarIcon}
                       src={excelIcon}
                       alt="Excel icon"
                       onClick={() => handleCrossTabClick()}
@@ -1055,7 +1056,7 @@ const Landing = ({idleCountParam}) => {
                       alt="Divider icon"
                       ></img>
                       <img
-                      className={`${classes.refreshicon} ${refreshSpin ? classes.spin : ''}`}
+                      className={`${classes.toolbarIcon} ${classes.toolbarIconRefresh} ${refreshSpin ? classes.spin : ''}`}
                       src={refreshIcon}
                       alt="Refresh"
                       onClick={() => handleTriggerRefresh()}
@@ -1066,6 +1067,7 @@ const Landing = ({idleCountParam}) => {
                 )
                 }
             </div>
+            {renderContextBar()}
             <div className={classes.dashboardblock} ref={dashboardRef} >
                 {renderContent()}
             </div>
