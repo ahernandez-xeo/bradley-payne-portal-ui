@@ -1,21 +1,15 @@
-import { useRef, useEffect, useState, useContext } from "react";
+import { useRef, useEffect, useContext } from "react";
 
 import classes from "./LoginForm.module.scss";
-import usernameIcon from "../assets/fa-user.svg";
-import passwordIcon from "../assets/carbon_password.svg";
 import ValidUserContext from "../authCheck";
-
 
 let isInitial = true;
 
 function LoginForm() {
   const validUserContext = useContext(ValidUserContext);
-  const [disclaimerAcknowledged, setDisclaimerAcknowledged] = useState(true);
-
 
   const emailInputRef = useRef();
   const passwordInputRef = useRef();
-
 
   useEffect(() => {
     if (isInitial) {
@@ -33,17 +27,16 @@ function LoginForm() {
       false
     );
   };
-  
 
   const handleForgotClick = () => {
-    validUserContext.forgotPassword()
-  }
+    validUserContext.forgotPassword();
+  };
 
   return (
     <div className={classes.logincontainer}>
       <form onSubmit={submitHandler} className={classes.form}>
         <div className={classes.loginInstructions}>
-          Please enter your email address and password.
+          Enter your access credentials to continue
         </div>
         <div>
           <input
@@ -54,9 +47,8 @@ function LoginForm() {
             autoComplete="on"
             placeholder="E-mail"
             ref={emailInputRef}
-            // value={rememberMeValue} 
             required={!validUserContext.isLoggedIn}
-          ></input>
+          />
         </div>
 
         <div>
@@ -69,26 +61,16 @@ function LoginForm() {
             placeholder="Password"
             ref={passwordInputRef}
             required={!validUserContext.isLoggedIn}
-          ></input>
-        </div>
-        {/* <div className={classes.rememberMeContainer}>
-          <input
-            type="checkbox"
-            id="remember-me"
-            name="remember-me"
-            checked={rememberMe}
-            onChange={handleRememberMeChange}
           />
-          <label htmlFor="remember-me" className={classes.rememberMeLabel}>
-            Remember Me
-          </label>
-        </div> */}
-        <div className={classes.forgot} onClick={() => handleForgotClick()}>Forgot Password?</div>
+        </div>
+        <div className={classes.forgot} onClick={() => handleForgotClick()}>
+          Forgot Password?
+        </div>
         <button
-          className={`${disclaimerAcknowledged ? classes.loginBtn : classes.loginBtnDisabled}`}
-          disabled={validUserContext.isLoggedIn || !disclaimerAcknowledged}
+          className={classes.loginBtn}
+          disabled={validUserContext.isLoggedIn}
         >
-          {validUserContext.isLoggedIn ? "Already logged in" : "Login"}
+          {validUserContext.isLoggedIn ? "Already logged in" : "Sign In"}
         </button>
       </form>
     </div>

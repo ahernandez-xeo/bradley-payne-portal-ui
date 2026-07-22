@@ -1,60 +1,30 @@
 import classes from "./Landing.module.scss";
-import {useRef, useEffect, useState, useContext, useCallback} from "react";
+import { useRef, useEffect, useState, useContext } from "react";
 import ValidUserContext from "../authCheck";
-import signoutIcon from "../assets/fa-logout.svg";
 import menuIcon from "../assets/fa-menu.svg";
-import emailIcon from "../assets/fa-email.svg";
+import { useSwipeable } from "react-swipeable";
+import Dashboard from "./Dashboard";
+import oarLogo from "../assets/oar-logo-transparent-replit.png";
+import PortalHome from "./PortalHome";
+import heroFallback from "../assets/portal-hero.webp";
 
-import downloadIcon from "../assets/fa-download.svg";
-import refreshIcon from "../assets/fa-refresh.svg";
-import { useSwipeable } from 'react-swipeable';
-import ProfileCard from './ProfileCard';
+const isMobileDevice = () => /Mobi|Android/i.test(navigator.userAgent);
 
+// Selection-key order for cache paths. Category is sidebar-driven; the rest are
+// always-visible top dropdowns (no progressive reveal).
+const FILTER_ORDER = ["Category", "Location Type", "Location", "Type"];
+const TOP_FILTER_ORDER = ["Location Type", "Location", "Type"];
+const CATEGORY_FILTER = "Category";
 
-import pdfIcon from "../assets/akar-icons_pdf.svg";
-import csvIcon from "../assets/akar-icons_csv.svg";
-import pwrpIcon from "../assets/akar-icons_pwrp.svg";
-import excelIcon from "../assets/akar-icons_excel.svg";
+const orderTopFilters = (filters) =>
+  TOP_FILTER_ORDER.map((name) => (filters || []).find((f) => f.fieldName === name)).filter(
+    Boolean
+  );
 
-import pngIcon from "../assets/akar-icons_png.svg";
-import dividerIcon from "../assets/akar-icons_divider.svg";
-import Dashboard from "./Dashboard"; 
-import transparent_logo from "../assets/BradleyPayne-logo.png";
-import pv_transparent_logo from "../assets/BP-logo-square.png";
-import bpLogoWhite from "../assets/BP-Oar-Logo-RGB.png";
-import fwd_curves from "../assets/fwdcurves.png";
-import CryptoWidget from "./CryptoWidget";
-import CoindeskWidget from "./CoindeskWidget";
-
-import WeatherWidget from "./WeatherWidget";
-
-import Navigation from "./Navigation";
-import { slide as Menu } from 'react-burger-menu'
-import { fetchSubscriptions, createSubscription, deleteSubscription } from './ApiService';
-
-
-const isMobileDevice = () => {
-  return /Mobi|Android/i.test(navigator.userAgent);
-};
-
-// Tableau exposes no filter hierarchy, so the cascade order is hardcoded here.
-// Each filter is revealed only after the previous one has a selection applied.
-const FILTER_ORDER = ["Category", "Type","Location Type", "Location"];
-
-const orderFilters = (filters) =>
-  FILTER_ORDER
-    .map((name) => (filters || []).find((f) => f.fieldName === name))
-    .filter(Boolean);
-
-// Extracted filters are cached per dashboard AND per selection path, so every
-// level of the cascade (not just the first) can be shown instantly from cache
-// while a fresh extraction runs in the background.
 const FILTER_CACHE_KEY = "dashboard_filter_cache";
 
-// Stable signature for the current cascade selections, e.g. "Category=A|Location=B".
 const makeSelectionKey = (selections) =>
-  FILTER_ORDER
-    .filter((name) => selections && selections[name] !== undefined)
+  FILTER_ORDER.filter((name) => selections && selections[name] !== undefined)
     .map((name) => `${name}=${selections[name]}`)
     .join("|");
 
@@ -84,7 +54,11 @@ const setCachedFilters = (dashboardKey, selectionKey, filters) => {
   }
   try {
     const cache = readFilterCache();
-    if (!cache[dashboardKey] || typeof cache[dashboardKey] !== "object" || Array.isArray(cache[dashboardKey])) {
+    if (
+      !cache[dashboardKey] ||
+      typeof cache[dashboardKey] !== "object" ||
+      Array.isArray(cache[dashboardKey])
+    ) {
       cache[dashboardKey] = {};
     }
     cache[dashboardKey][selectionKey] = filters;
@@ -94,1069 +68,846 @@ const setCachedFilters = (dashboardKey, selectionKey, filters) => {
   }
 };
 
-const Landing = ({idleCountParam}) => {
+const findCategoryValuesInFilters = (filters) => {
+  const category = (filters || []).find((f) => f.fieldName === CATEGORY_FILTER);
+  return category && Array.isArray(category.values) ? category.values : [];
+};
 
-    const currentNav = Object.entries(JSON.parse(localStorage.getItem("navigation")));
+/** Prefer live/state filters, then any cached Category domain for this dashboard. */
+const getDepartmentValues = (dashboardKey, dashboardFilters) => {
+  const fromState = findCategoryValuesInFilters(dashboardFilters);
+  if (fromState.length > 0) {
+    return fromState;
+  }
+  if (!dashboardKey) {
+    return [];
+  }
+  const cache = readFilterCache();
+  const entry = cache[dashboardKey];
+  if (!entry || typeof entry !== "object") {
+    return [];
+  }
+  for (const key of Object.keys(entry)) {
+    const values = findCategoryValuesInFilters(entry[key]);
+    if (values.length > 0) {
+      return values;
+    }
+  }
+  return [];
+};
 
+const isFundingNavLabel = (label) =>
+  /forecast|finance|funding/i.test(label || "");
 
-    const filteredNav = currentNav.filter(([a, b]) => {
-      return b.name.includes("Curves Export") == false
-    });
+const Landing = ({ idleCountParam }) => {
+  const currentNav = Object.entries(JSON.parse(localStorage.getItem("navigation")));
 
-    const exportNav = currentNav.filter(([a, b]) => {
-      return b.name.includes("Curves Export") == true
-    });
+  const filteredNav = currentNav.filter(([, b]) => !b.name.includes("Curves Export"));
 
-    const sortedNav = filteredNav.sort((a, b) => {
-      if(a[1].name > b[1].name) {
-        // If two elements have same number, then the one who has larger rating.average wins
-        return 1;
-      } else {
-        // If two elements have different number, then the one who has larger number wins
-        return -1;
-      }
-    });
-    const clientGroupRaw = JSON.parse(localStorage.getItem("client_list"));
-    const clientGroup =
-      (typeof clientGroupRaw === "string" && clientGroupRaw) ? clientGroupRaw : null;
-    const clientList = Array.isArray(clientGroupRaw) ? clientGroupRaw : [];
-    const group = JSON.parse(localStorage.getItem("group")) ?? "default";
-    const firstGroup = group === "Admin" 
-      ? (clientList.length > 0 ? clientList[0] : "default")
-      : group;
-      
-    //const clientFilteredNav = sortedNav.filter(([key, value]) => value.client === firstGroup);
-    const clientFilteredNav = sortedNav;
+  const sortedNav = filteredNav.sort((a, b) => (a[1].name > b[1].name ? 1 : -1));
+  const clientGroupRaw = JSON.parse(localStorage.getItem("client_list"));
+  const clientGroup =
+    typeof clientGroupRaw === "string" && clientGroupRaw ? clientGroupRaw : null;
+  const clientList = Array.isArray(clientGroupRaw) ? clientGroupRaw : [];
+  const group = JSON.parse(localStorage.getItem("group")) ?? "default";
 
+  const clientFilteredNav = sortedNav;
 
-    const flattenNav = (nav) => nav.flatMap(([, entry]) =>
+  const flattenNav = (nav) =>
+    nav.flatMap(([, entry]) =>
       entry.dashboards.map((dashboard, i) => ({
-        label: entry.dashboards.length > 1
-          ? `${entry.name} - ${dashboard.split('/').pop()}`
-          : entry.name,
+        label:
+          entry.dashboards.length > 1
+            ? `${entry.name} - ${dashboard.split("/").pop()}`
+            : entry.name,
         link: dashboard,
         id: entry.dashboard_ids[i],
       }))
     );
 
-    const flatNav = flattenNav(clientFilteredNav);
-    var buttons = flatNav.map(n => n.label);
-    var links = flatNav.map(n => n.link);
-    var dashboardids = flatNav.map(n => n.id);
+  const flatNav = flattenNav(clientFilteredNav);
+  const buttons = flatNav.map((n) => n.label);
+  const links = flatNav.map((n) => n.link);
+  const dashboardids = flatNav.map((n) => n.id);
 
-    const [activeTab, setActiveTab] = useState(0);
-    const [menuOpen, setMenuOpen] = useState(isMobileDevice()? false: true);
+  const [portalView, setPortalView] = useState("home");
+  const [menuOpen, setMenuOpen] = useState(!isMobileDevice());
 
-    const [activeButton, setActiveButton] = useState(0);
-    const [activeDashboard, setActiveDashboard] = useState(true);
-    const [activeURL, setActiveURL] = useState(links[0]);
-    const [activeDashboardId, setActiveDashboardId] = useState(dashboardids[0]);
-    const [displayTabs, setDisplayTabs] = useState(false);
-    const [displayToolbarButtons, setDisplayToolbarButtons] = useState(true);
+  const [activeButton, setActiveButton] = useState(0);
+  const [activeDashboard, setActiveDashboard] = useState(true);
+  const [activeURL, setActiveURL] = useState(links[0]);
+  const [activeDashboardId, setActiveDashboardId] = useState(dashboardids[0]);
+  const [displayTabs, setDisplayTabs] = useState(false);
 
-    const [defultFolder, setDefaultFolder] = useState('Home');
-    const [defultFolderId, setDefaultFolderId] = useState('Home');
-    const [defaultEmail, setDefaultEmail] = useState(localStorage.getItem("login-name") ?? "");
-    const [defaultUser, setDefaultUser] = useState(JSON.parse(localStorage.getItem("user-name")) ?? "");
-    // const [defaultGroup, setDefaultGroup] = useState(JSON.parse(localStorage.getItem("group")) ?? "default");
-    const [defaultGroup, setDefaultGroup] = useState(() => {
-      if (group === "Admin") {
-        
-        return clientList.length > 0 ? clientList[0] : "default";
-      }
-      return group;
-    });
-    const [defaultCompany, setDefaultCompany] = useState((JSON.parse(localStorage.getItem("company_logo")) || JSON.parse(localStorage.getItem("company")))?? "default");
-    const [defaultClient, setDefaultClient] = useState((JSON.parse(localStorage.getItem("client_logo")) || JSON.parse(localStorage.getItem("client"))) ?? "default");
-    const [defaultClientList, setDefaultClientList] = useState(JSON.parse(localStorage.getItem("client_list")) ?? "default");
+  const [defaultGroup, setDefaultGroup] = useState(() => {
+    if (group === "Admin") {
+      return clientList.length > 0 ? clientList[0] : "default";
+    }
+    return group;
+  });
 
-    const [breadCrumbs, setBreadCrumbs] = useState([{"id":buttons[0], "name":buttons[0]}]);
-    const [currentButtons, setCurrentButtons] = useState(buttons);
-    const [currentLinks, setCurrentLinks] = useState(links);
-    const [currentIds, setCurrentIds] = useState(dashboardids);
+  const [currentButtons, setCurrentButtons] = useState(buttons);
+  const [currentLinks, setCurrentLinks] = useState(links);
+  const [currentIds, setCurrentIds] = useState(dashboardids);
 
-    const [dashboardFilters, setDashboardFilters] = useState(() => getCachedFilters(links[0]));
-    const [filterSelections, setFilterSelections] = useState({});
-    const [vizReady, setVizReady] = useState(false);
+  const [dashboardFilters, setDashboardFilters] = useState(() =>
+    getCachedFilters(links[0])
+  );
+  const [filterSelections, setFilterSelections] = useState({});
+  const [vizReady, setVizReady] = useState(false);
+  const [filterLoading, setFilterLoading] = useState(false);
 
-    const [detailsOverlayOpen, setDetailsOverlayOpen] = useState(false);
-    // Tracks the current candidate URL while falling back through shorter paths.
-    const [detailsImageUrl, setDetailsImageUrl] = useState(null);
+  const [detailsOverlayOpen, setDetailsOverlayOpen] = useState(false);
+  const [detailsImageUrl, setDetailsImageUrl] = useState(null);
 
-    const [refreshSpin, setRefreshSpin] = useState(false);
-    const [subscriptions, setSubscriptions] = useState({});
-    const [subscriptionCheck, setSubscriptionCheck] = useState(false);
-    const [updatingSub, setupdatingSub] = useState(false);
+  const [idleCount, setIdleCount] = useState(idleCountParam);
 
-    const [idleCount, setIdleCount] = useState(idleCountParam);
+  const containerRef = useRef(null);
+  const dashboardRef = useRef(null);
+  const sidebarRef = useRef(null);
+  const vizRef = useRef(null);
+  const activeURLRef = useRef(links[0]);
+  const filterOpSeqRef = useRef(0);
+  const vizOpChainRef = useRef(Promise.resolve());
+  const dashboardFiltersRef = useRef(dashboardFilters);
 
+  useEffect(() => {
+    activeURLRef.current = activeURL;
+  }, [activeURL]);
 
-    const [hasVerticalScrollbar, setHasVerticalScrollbar] = useState(false);
-    
-    const containerRef = useRef(null);
+  useEffect(() => {
+    dashboardFiltersRef.current = dashboardFilters;
+  }, [dashboardFilters]);
 
-    //const [dashboardRef, setDashboardRef] = useState(undefined)
-    const dashboardRef = useRef(null)
-    const sidebarRef = useRef(null);
-    const vizRef = useRef(null);
-    // Holds the current dashboard link so the (once-registered) viz ready
-    // callback always caches against the dashboard actually being shown.
-    const activeURLRef = useRef(links[0]);
-    // Monotonic token for filter operations. Background refreshes capture the
-    // token at start and only update the visible list if they're still the
-    // latest, preventing stale extractions from clobbering the current view.
-    const filterOpSeqRef = useRef(0);
-    // Serializes all Tableau viz mutations (applyFilter/clear/revert + extract)
-    // so they run in order in the background without blocking the (cache-driven)
-    // UI updates.
-    const vizOpChainRef = useRef(Promise.resolve());
+  const validUserContext = useContext(ValidUserContext);
 
-    useEffect(() => {
-      activeURLRef.current = activeURL;
-    }, [activeURL]);
+  useEffect(() => {
+    if (idleCountParam !== idleCount) {
+      setIdleCount(idleCountParam);
+      handleBackgroundRefresh();
+    }
+  }, [idleCountParam]);
 
-    const validUserContext = useContext(ValidUserContext);
+  const handleOutsideClick = (event) => {
+    // Only auto-close the drawer on mobile; desktop keeps the sidebar open.
+    if (!isMobileDevice()) {
+      return;
+    }
+    if (sidebarRef.current && !sidebarRef.current.contains(event.target)) {
+      setMenuOpen(false);
+    }
+  };
 
-    useEffect(() => {
-        const checkScrollbars = () => {
-            if (containerRef.current) {
-                const container = containerRef.current;
-                setHasVerticalScrollbar(container.scrollHeight > container.clientHeight);
-            }
-        };
-        // Initial check
-        checkScrollbars();
-        // Check on window resize
-        window.addEventListener('resize', checkScrollbars);
-        // Clean up event listener on component unmount
-        return () => window.removeEventListener('resize', checkScrollbars);
-    }, []);
+  const handlers = useSwipeable({
+    onSwipedLeft: () => setMenuOpen(false),
+    preventDefaultTouchmoveEvent: true,
+    trackMouse: true,
+  });
 
-    useEffect(() => {
-      if (idleCountParam != idleCount) {
-        setIdleCount(idleCountParam);
-        handleBackgroundRefresh()
-      }
-    }, [idleCountParam]);
-
-    const handleOutsideClick = (event) => {
-      if (sidebarRef.current && !sidebarRef.current.contains(event.target)) {
-        setMenuOpen(false);
-      }
+  useEffect(() => {
+    if (menuOpen) {
+      document.addEventListener("mousedown", handleOutsideClick);
+    } else {
+      document.removeEventListener("mousedown", handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
     };
+  }, [menuOpen]);
 
-    const handlers = useSwipeable({
-      onSwipedLeft: () => setMenuOpen(false),
-      preventDefaultTouchmoveEvent: true,
-      trackMouse: true
-    });
+  const handleLogoutClick = () => {
+    validUserContext.logoutUser();
+  };
 
-    useEffect(() => {
-      if (menuOpen) {
-        document.addEventListener('mousedown', handleOutsideClick);
-      } else {
-        document.removeEventListener('mousedown', handleOutsideClick);
+  const handleExportPNGClick = () => {
+    try {
+      const viz = vizRef.current || dashboardRef.current?.firstChild?.firstChild?.childNodes?.[1];
+      if (viz && viz.exportImageAsync) {
+        viz.exportImageAsync();
       }
-    
-      // Clean up the event listener on component unmount
-      return () => {
-        document.removeEventListener('mousedown', handleOutsideClick);
-      };
-    }, [menuOpen]);
-
-    // useEffect(() => {
-    //   const loadData = async () => {
-    //     try {
-    //       const data = 
-    //       {
-    //         "useremail": defaultEmail
-    //       }
-    //       const result = await fetchSubscriptions(data);
-    //       if (Object.keys(result).includes(activeDashboardId)) {
-    //         setSubscriptionCheck(true);
-    //       }
-
-    //       setSubscriptions(result);
-    //     } catch (error) {
-          
-    //     } finally {
-          
-    //     }
-    //   };
-  
-    //   loadData();
-    // }, [activeURL]);
-  
-
-    const handleDashboardClick = (link) => {
-        setActiveDashboard(true)
-        setActiveURL(link)
-        setDisplayTabs(false)
-        setDisplayToolbarButtons(true)
+    } catch (error) {
+      console.error("Error exporting PNG:", error);
     }
+  };
 
-    const handleFolderClick = (name, id) => {
-      setDefaultFolder(name)
-      setDefaultFolderId(id)
-      breadCrumbs.push({"id":id, "name":name})
-      setBreadCrumbs(breadCrumbs)
-    }
-
-    const handleLogoutClick = () => {
-        validUserContext.logoutUser()
-    }
-  
-    const handleExportPDFClick = () => {
-      dashboardRef.current.firstChild.firstChild.childNodes[1].displayDialogAsync("export-pdf");
-    }
-
-    const handleExportCSVClick = () => {
-      dashboardRef.current.firstChild.firstChild.childNodes[1].displayDialogAsync("export-csv");
-    }
-
-    const handleExportPNGClick = () => {
-      dashboardRef.current.firstChild.firstChild.childNodes[1].exportImageAsync();
-    }
-
-    const handleExportPWRPClick = () => {
-      dashboardRef.current.firstChild.firstChild.childNodes[1].displayDialogAsync("export-powerpoint");
-    }
-
-    const handleCrossTabClick = () => {
-      dashboardRef.current.firstChild.firstChild.childNodes[1].displayDialogAsync("export-cross-tab");
-    }
-
-    const handleTriggerRefresh = () => {
-      setRefreshSpin(true)
-      dashboardRef.current.firstChild.firstChild.childNodes[1].refreshDataAsync().then(function() {
-        console.log("Dashboard refreshed.");
-        setRefreshSpin(false)
-        }).catch(function(error) {
-            console.error("Error refreshing dashboard:", error);
-            setRefreshSpin(false)
+  const handleBackgroundRefresh = () => {
+    try {
+      const viz = vizRef.current || dashboardRef.current?.firstChild?.firstChild?.childNodes?.[1];
+      if (viz && viz.refreshDataAsync) {
+        viz.refreshDataAsync().catch((error) => {
+          console.error("Error refreshing dashboard:", error);
         });
-    }
-
-    const handleBackgroundRefresh = () => {
-      dashboardRef.current.firstChild.firstChild.childNodes[1].refreshDataAsync().then(function() {
-        console.log("Dashboard refreshed in background.");
-        }).catch(function(error) {
-            console.error("Error refreshing dashboard:", error);
-        });
-    }
-
-
-
-    const handleLogoClick = () => {
-      setActiveDashboard(false)
-    }
-    const handleCheckboxChange = () => {
-      const createSub = async () => {
-        try {
-          const data = 
-          {
-            "useremail": defaultEmail,
-            "dashboardid": activeDashboardId,
-            "link": activeURL
-          }
-          setSubscriptionCheck(true);
-          const result = await createSubscription(data);
-          const newSubscriptions = { ...subscriptions };
-          newSubscriptions[activeDashboardId] = defaultEmail;
-      
-          // Update the state with the new object
-          setSubscriptions(newSubscriptions);
-          setupdatingSub(false)
-          console.log("Subscription created:", result);
-
-
-        } catch (error) {
-          console.error('Caught an error:', error);
-        } finally {
-          
-        }
-      };
-
-      const deleteSub = async () => {
-        try {
-          const data = 
-          {
-            "useremail": defaultEmail,
-            "dashboardid": activeDashboardId
-          }
-          setSubscriptionCheck(false);
-          const result = await deleteSubscription(data);
-          const newSubscriptions = { ...subscriptions };
-          delete newSubscriptions[activeDashboardId];
-      
-          // Update the state with the new object
-          setSubscriptions(newSubscriptions);
-          setupdatingSub(false)
-
-          console.log("Subscription deleted:", result);
-
-
-        } catch (error) {
-          console.error('Caught an error:', error);
-        } finally {
-          
-        }
-      };
-      if (!updatingSub){
-        setupdatingSub(true)
-
-        if (Object.keys(subscriptions).includes(activeDashboardId)) {
-          deleteSub();
-        } else {
-          createSub();
-        }
       }
+    } catch (error) {
+      console.error("Error refreshing dashboard:", error);
     }
+  };
 
-    // Pull the categorical filters (and their currently relevant options) off the
-    // live Tableau viz. Re-running this after a selection gives the narrowed-down
-    // options for the next filter in the cascade.
-    // Only the worksheet(s) listed here are queried — narrowing this to a single
-    // reliable source is significantly faster than walking every worksheet.
-    const FILTER_SOURCE_WORKSHEETS = ["All Years (10yr)"];
+  const FILTER_SOURCE_WORKSHEETS = ["All Years (10yr)"];
 
-    const extractFiltersFromViz = async (viz) => {
-      const activeSheet = viz.workbook.activeSheet;
-      const allWorksheets = activeSheet.sheetType === "dashboard"
-        ? activeSheet.worksheets
-        : [activeSheet];
+  const extractFiltersFromViz = async (viz) => {
+    const activeSheet = viz.workbook.activeSheet;
+    const allWorksheets =
+      activeSheet.sheetType === "dashboard" ? activeSheet.worksheets : [activeSheet];
 
-      // Restrict to the configured source worksheet(s); fall back to all sheets
-      // only when none of the named ones are present in this dashboard.
-      const worksheets = allWorksheets.filter((ws) =>
-        FILTER_SOURCE_WORKSHEETS.includes(ws.name)
-      );
-      const effectiveWorksheets = worksheets.length > 0 ? worksheets : allWorksheets;
+    const worksheets = allWorksheets.filter((ws) =>
+      FILTER_SOURCE_WORKSHEETS.includes(ws.name)
+    );
+    const effectiveWorksheets = worksheets.length > 0 ? worksheets : allWorksheets;
 
-      const filterMap = {};
-      console.log(
-        `Extract filters from viz — using worksheet(s): ${effectiveWorksheets.map((ws) => ws.name).join(", ")}`
-      );
+    const filterMap = {};
 
-      for (const worksheet of effectiveWorksheets) {
-        const worksheetFilters = await worksheet.getFiltersAsync();
-        for (const filter of worksheetFilters) {
-          if (filter.filterType !== "categorical") {
-            continue;
+    for (const worksheet of effectiveWorksheets) {
+      const worksheetFilters = await worksheet.getFiltersAsync();
+      for (const filter of worksheetFilters) {
+        if (filter.filterType !== "categorical") {
+          continue;
+        }
+        const key = filter.fieldName;
+        const appliedValues = (filter.appliedValues || []).map(
+          (v) => v.formattedValue ?? v.value
+        );
+
+        const fetchFilterValues = async () => {
+          try {
+            const domain = await filter.getDomainAsync("relevant");
+            return (domain.values || []).map((v) => v.formattedValue ?? v.value);
+          } catch (domainError) {
+            return appliedValues;
           }
-          const key = filter.fieldName;
-          const appliedValues = (filter.appliedValues || []).map(
-            (v) => v.formattedValue ?? v.value
-          );
+        };
 
-          const fetchFilterValues = async () => {
-            try {
-              const domain = await filter.getDomainAsync("relevant");
-              // const domain = await filter.getDomainAsync("database");
-
-              return (domain.values || []).map((v) => v.formattedValue ?? v.value);
-            } catch (domainError) {
-              return appliedValues;
-            }
+        if (!filterMap[key]) {
+          filterMap[key] = {
+            fieldName: filter.fieldName,
+            worksheetNames: [worksheet.name],
+            values: await fetchFilterValues(),
+            appliedValues,
+            isAllSelected: !!filter.isAllSelected,
           };
-
-          if (!filterMap[key]) {
-            filterMap[key] = {
-              fieldName: filter.fieldName,
-              worksheetNames: [worksheet.name],
-              values: await fetchFilterValues(),
-              appliedValues,
-              isAllSelected: !!filter.isAllSelected,
-            };
-          } else {
-            if (!filterMap[key].worksheetNames.includes(worksheet.name)) {
-              filterMap[key].worksheetNames.push(worksheet.name);
-            }
-            // A previous worksheet's copy of this filter may have returned no
-            // values; retry the domain fetch from this worksheet's filter.
-            if (filterMap[key].values.length === 0) {
-              const retriedValues = await fetchFilterValues();
-              if (retriedValues.length > 0) {
-                filterMap[key].values = retriedValues;
-                if (appliedValues.length > 0) {
-                  filterMap[key].appliedValues = appliedValues;
-                }
+        } else {
+          if (!filterMap[key].worksheetNames.includes(worksheet.name)) {
+            filterMap[key].worksheetNames.push(worksheet.name);
+          }
+          if (filterMap[key].values.length === 0) {
+            const retriedValues = await fetchFilterValues();
+            if (retriedValues.length > 0) {
+              filterMap[key].values = retriedValues;
+              if (appliedValues.length > 0) {
+                filterMap[key].appliedValues = appliedValues;
               }
             }
           }
         }
       }
-      const result = Object.values(filterMap);
-      const activeSheetName = activeSheet.name ?? "(unknown)";
-      console.group(`[Filters] ${activeSheetName}`);
-      if (result.length === 0) {
-        console.log("No categorical filters found.");
-      } else {
-        result.forEach((f) => {
-          console.log(
-            `  ${f.fieldName}`,
-            `\n    worksheets : ${f.worksheetNames.join(", ")}`,
-            `\n    values     : ${f.values.length === 0 ? "(none)" : f.values.join(" | ")}`,
-            `\n    applied    : ${f.appliedValues.length === 0 ? "(all)" : f.appliedValues.join(" | ")}`,
-          );
-        });
-      }
-      console.groupEnd();
-      return result;
-    };
+    }
+    return Object.values(filterMap);
+  };
 
-    const applyFilterValue = async (viz, filter, value) => {
-      const activeSheet = viz.workbook.activeSheet;
-      const worksheets = activeSheet.sheetType === "dashboard"
-        ? activeSheet.worksheets
-        : [activeSheet];
-      for (const worksheet of worksheets) {
-        if (!filter.worksheetNames.includes(worksheet.name)) {
-          continue;
-        }
+  const applyFilterValue = async (viz, filter, value) => {
+    if (!viz || !filter?.fieldName) {
+      return;
+    }
+    const activeSheet = viz.workbook?.activeSheet;
+    if (!activeSheet) {
+      console.warn("No active sheet available to apply filter");
+      return;
+    }
+    const worksheets =
+      activeSheet.sheetType === "dashboard" ? activeSheet.worksheets : [activeSheet];
+
+    let applied = false;
+    for (const worksheet of worksheets) {
+      try {
         if (value === "__ALL__") {
           await worksheet.clearFilterAsync(filter.fieldName);
         } else {
           await worksheet.applyFilterAsync(filter.fieldName, [value], "replace");
         }
+        applied = true;
+      } catch (error) {
+        // Worksheet may not expose this field — continue trying others.
       }
+    }
+
+    if (!applied) {
+      console.warn(`Unable to apply filter "${filter.fieldName}" to any worksheet`);
+    }
+  };
+
+  const resolveFilterMeta = (fieldName, fallback) => {
+    const fromState = dashboardFiltersRef.current.find((f) => f.fieldName === fieldName);
+    if (fromState) {
+      return fromState;
+    }
+    if (fallback && fallback.fieldName === fieldName) {
+      return fallback;
+    }
+    return {
+      fieldName,
+      worksheetNames: [],
+      values: [],
     };
+  };
 
-    // Show cached filters for a given selection path immediately (if any).
-    const showCachedFor = (dashboardKey, selections) => {
-      const cached = getCachedFilters(dashboardKey, makeSelectionKey(selections));
-      if (cached.length > 0) {
-        setDashboardFilters(cached);
-      }
-      return cached;
-    };
+  const showCachedFor = (dashboardKey, selections) => {
+    const cached = getCachedFilters(dashboardKey, makeSelectionKey(selections));
+    if (cached.length > 0) {
+      setDashboardFilters(cached);
+    }
+    return cached;
+  };
 
-    // Queue a viz mutation so all Tableau operations run strictly in order, even
-    // though the UI has already advanced optimistically from cache.
-    const enqueueVizOp = (op) => {
-      const next = vizOpChainRef.current.then(op).catch((error) => {
-        console.error("Error in queued viz operation:", error);
-      });
-      vizOpChainRef.current = next;
-      return next;
-    };
+  const enqueueVizOp = (op) => {
+    const next = vizOpChainRef.current.then(op).catch((error) => {
+      console.error("Error in queued viz operation:", error);
+    });
+    vizOpChainRef.current = next;
+    return next;
+  };
 
-    // Extract the live values for a selection path and cache them. Because viz
-    // ops are serialized, the viz reflects exactly this path when we run, so the
-    // result is always the correct value to cache. We only repaint the visible
-    // list if this is still the latest operation and we're on the same dashboard.
-    const backgroundRefresh = async (viz, dashboardKey, selections, seq) => {
-      const fresh = await extractFiltersFromViz(viz);
-      if (fresh.length === 0) {
-        return;
-      }
-      setCachedFilters(dashboardKey, makeSelectionKey(selections), fresh);
-      if (seq === filterOpSeqRef.current && activeURLRef.current === dashboardKey) {
-        setDashboardFilters(fresh);
-      }
-    };
+  const backgroundRefresh = async (viz, dashboardKey, selections, seq) => {
+    const fresh = await extractFiltersFromViz(viz);
+    if (fresh.length === 0) {
+      return;
+    }
+    setCachedFilters(dashboardKey, makeSelectionKey(selections), fresh);
+    if (seq === filterOpSeqRef.current && activeURLRef.current === dashboardKey) {
+      setDashboardFilters(fresh);
+    }
+  };
 
-    // Called by Dashboard once the Tableau viz fires "firstinteractive".
-    // Shows cached first-level filters immediately, then refreshes in background.
-    const handleDashboardReady = (viz) => {
-      vizRef.current = viz;
-      const dashboardKey = activeURLRef.current;
-      const seq = ++filterOpSeqRef.current;
-      setFilterSelections({});
-      showCachedFor(dashboardKey, {});
+  const handleDashboardReady = (viz) => {
+    vizRef.current = viz;
+    const dashboardKey = activeURLRef.current;
+    const seq = ++filterOpSeqRef.current;
+    setFilterSelections({});
+    showCachedFor(dashboardKey, {});
+    setVizReady(true);
+    enqueueVizOp(() => backgroundRefresh(viz, dashboardKey, {}, seq));
+  };
 
-      // The viz is interactive now (this fires on "firstinteractive"), so cached
-      // filters are immediately usable while the fresh extraction runs.
-      setVizReady(true);
-      enqueueVizOp(() => backgroundRefresh(viz, dashboardKey, {}, seq));
-    };
+  const handleTopFilterChange = (filter, value) => {
+    if (!vizReady || filterLoading) {
+      return;
+    }
+    const viz = vizRef.current;
+    if (!viz) {
+      return;
+    }
+    validUserContext.localAuthCheck(false);
+    const dashboardKey = activeURLRef.current;
 
-    const handleFilterChange = (filter, value, index) => {
-      if (!vizReady) {
-        return;
-      }
-      const viz = vizRef.current;
-      if (!viz) {
-        return;
-      }
-      validUserContext.localAuthCheck(false);
-      const dashboardKey = activeURLRef.current;
+    const indexInOrder = FILTER_ORDER.indexOf(filter.fieldName);
+    const downstream = FILTER_ORDER.slice(indexInOrder + 1);
+    const newSelections = { ...filterSelections };
+    if (!value) {
+      delete newSelections[filter.fieldName];
+    } else {
+      newSelections[filter.fieldName] = value;
+    }
+    downstream.forEach((name) => {
+      delete newSelections[name];
+    });
 
-      // Work out the new selection path up front so we can update the UI now.
-      const ordered = orderFilters(dashboardFilters);
-      const downstream = ordered.slice(index + 1);
-      const newSelections = { ...filterSelections, [filter.fieldName]: value };
-      downstream.forEach((downstreamFilter) => {
-        delete newSelections[downstreamFilter.fieldName];
-      });
+    const seq = ++filterOpSeqRef.current;
+    setFilterSelections(newSelections);
+    showCachedFor(dashboardKey, newSelections);
+    setFilterLoading(true);
 
-      // Optimistic, instant UI: advance the cascade and show the next level from
-      // cache right away (no waiting on the Tableau apply call).
-      const seq = ++filterOpSeqRef.current;
-      setFilterSelections(newSelections);
-      showCachedFor(dashboardKey, newSelections);
-
-      // Apply to the viz + refresh values in the background, in order.
-      enqueueVizOp(async () => {
-        await applyFilterValue(viz, filter, value);
-        for (const downstreamFilter of downstream) {
+    enqueueVizOp(async () => {
+      try {
+        const liveFilter = resolveFilterMeta(filter.fieldName, filter);
+        if (!value) {
+          await applyFilterValue(viz, liveFilter, "__ALL__");
+        } else {
+          await applyFilterValue(viz, liveFilter, value);
+        }
+        for (const name of downstream) {
+          const downstreamFilter = resolveFilterMeta(name);
           await applyFilterValue(viz, downstreamFilter, "__ALL__");
         }
-        await backgroundRefresh(viz, dashboardKey, newSelections, seq);
-      });
-    };
-
-    // Clicking a collapsed (already-selected) filter jumps back to that step:
-    // it clears that filter and everything downstream, so the list re-expands.
-    const handleReopenFilter = (filter, index) => {
-      if (!vizReady) {
-        return;
+      } finally {
+        // Hide overlay once the viz has been updated; option refresh can continue.
+        setFilterLoading(false);
       }
-      const viz = vizRef.current;
-      if (!viz) {
-        return;
-      }
-      validUserContext.localAuthCheck(false);
-      const dashboardKey = activeURLRef.current;
+      await backgroundRefresh(viz, dashboardKey, newSelections, seq);
+    });
+  };
 
-      const ordered = orderFilters(dashboardFilters);
-      const fromHere = ordered.slice(index);
-      const newSelections = { ...filterSelections };
-      fromHere.forEach((clearedFilter) => {
-        delete newSelections[clearedFilter.fieldName];
-      });
-
-      const seq = ++filterOpSeqRef.current;
-      setFilterSelections(newSelections);
-      showCachedFor(dashboardKey, newSelections);
-
-      enqueueVizOp(async () => {
-        for (const clearedFilter of fromHere) {
-          await applyFilterValue(viz, clearedFilter, "__ALL__");
-        }
-        await backgroundRefresh(viz, dashboardKey, newSelections, seq);
-      });
-    };
-
-    const handleClearFilters = () => {
-      if (!vizReady) {
-        return;
-      }
-      const viz = vizRef.current;
-      if (!viz) {
-        return;
-      }
-      validUserContext.localAuthCheck(false);
-      const dashboardKey = activeURLRef.current;
-
-      const seq = ++filterOpSeqRef.current;
-      setFilterSelections({});
-      showCachedFor(dashboardKey, {});
-
-      enqueueVizOp(async () => {
-        // Revert the workbook to its published state, i.e. load from scratch.
-        await viz.workbook.revertAllAsync();
-        await backgroundRefresh(viz, dashboardKey, {}, seq);
-      });
-    };
-
-    // Build the GCS details image URL from the active client + cascade selections.
-    // Segments: details/{client}/{Category}/{LocationType}/{Location}/display.jpg
-    // Only selections that have been made are included (most-specific path wins).
-    const buildDetailsUrl = (segments) => {
-      const encoded = segments.map((s) => encodeURIComponent(s)).join("/");
-      return `https://storage.googleapis.com/bp_portal_artifacts/details/${encoded}/display.jpg`;
-    };
-
-    const getDetailsCandidateSegments = () => {
-      // logoKey already resolves clientGroup → defaultGroup → "default" in the
-      // right priority order, and is the same key used for the company logo URL.
-      const client = clientGroup || defaultGroup;
-      const filterSegments = FILTER_ORDER
-        .filter((name) => filterSelections[name] !== undefined)
-        .map((name) => filterSelections[name]);
-      return [client, ...filterSegments];
-    };
-
-    const handleOpenDetails = () => {
-      const segments = getDetailsCandidateSegments();
-      setDetailsImageUrl(buildDetailsUrl(segments));
-      setDetailsOverlayOpen(true);
-    };
-
-    // Called when the image 404s; drop the last filter segment and retry.
-    const handleDetailsImageError = () => {
-      setDetailsImageUrl((current) => {
-        if (!current) {
-          return null;
-        }
-        // Decode and strip the trailing /display.jpg to get the segment list.
-        const base = "https://storage.googleapis.com/bp_portal_artifacts/details/";
-        const withoutBase = current.replace(base, "").replace("/display.jpg", "");
-        const parts = withoutBase.split("/").map(decodeURIComponent);
-        // Must keep at least [client, category] to be meaningful; otherwise give up.
-        if (parts.length <= 2) {
-          return null;
-        }
-        return buildDetailsUrl(parts.slice(0, -1));
-      });
-    };
-
-    const handleButtonClick = (tabIndex, tabText) => {
-      validUserContext.localAuthCheck(false);
-      setActiveButton(tabIndex);
-      setActiveURL(currentLinks[tabIndex])
-      setActiveDashboard(true)
-      setActiveDashboardId(currentIds[tabIndex])
-      setVizReady(false)
-      filterOpSeqRef.current++
-      setDashboardFilters(getCachedFilters(currentLinks[tabIndex]))
-      setFilterSelections({})
-      setDefaultFolder('Home')
-      setDisplayTabs(false)
-      if (isMobileDevice() ){
-        setMenuOpen(false)
-      }
-      setDisplayToolbarButtons(true)
-      let newBreadCrumbs
-      // Remove elements after the specific element
-      newBreadCrumbs = [{"id":tabText, "name":tabText}]
-      setBreadCrumbs(newBreadCrumbs)
-      setSubscriptionCheck(false);
-    };
-
-    const handleBreadCrumbClick = (folderName) => {
-      setActiveDashboard(false)
-      setDefaultFolder(folderName.name)
-      setDefaultFolderId(folderName.id)
-
-      let indexToRemove = breadCrumbs.indexOf(folderName);
-      let newBreadCrumbs
-      // Remove elements after the specific element
-      if (indexToRemove !== -1) {
-        newBreadCrumbs = breadCrumbs.slice(0, indexToRemove + 1);
-      }
-      setBreadCrumbs(newBreadCrumbs)
-    };
-
-    const handleMenuClick  = () => {
-      if (menuOpen) {
-        setMenuOpen(false)
-      } else {
-        setMenuOpen(true)
-      }
-    };
-
-    const handleEmailClick = () => {
-      const email = "no-reply@bradleypayne.com"; // Replace with the recipient's email address
-      const subject = "Customer Request"; // Replace with your desired subject
-      const body = ""; // Replace with your desired email body
-      
-      // Construct the mailto link
-      const mailtoLink = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-      //window.location.href = mailtoLink;
-      window.open(mailtoLink);
+  const handleDepartmentSelect = (value) => {
+    if (!vizReady || filterLoading) {
+      return;
     }
-
-    const renderContent = () => {
-      if (activeDashboard)
-          if (activeURL)
-            return renderDashboard()
-          else 
-            return (
-              <div></div>
-            )
-      else 
-          return renderNavigation()
-    } 
-
-    const renderNavigation = () => {
-      return (
-        <div>
-            <Navigation defaultFolder={defultFolder} defaultFolderId={defultFolderId} onDashboardClick={handleDashboardClick} onFolderClick={handleFolderClick}></Navigation>
-        </div>
-      )
+    const viz = vizRef.current;
+    if (!viz) {
+      return;
     }
+    validUserContext.localAuthCheck(false);
+    const dashboardKey = activeURLRef.current;
+    const newSelections = { [CATEGORY_FILTER]: value };
+    const seq = ++filterOpSeqRef.current;
+    setFilterSelections(newSelections);
+    showCachedFor(dashboardKey, newSelections);
+    setFilterLoading(true);
 
+    enqueueVizOp(async () => {
+      try {
+        const categoryFilter = resolveFilterMeta(CATEGORY_FILTER);
+        await applyFilterValue(viz, categoryFilter, value);
+        for (const name of TOP_FILTER_ORDER) {
+          const downstreamFilter = resolveFilterMeta(name);
+          await applyFilterValue(viz, downstreamFilter, "__ALL__");
+        }
+      } finally {
+        setFilterLoading(false);
+      }
+      await backgroundRefresh(viz, dashboardKey, newSelections, seq);
+    });
+  };
 
-    const renderDashboard = () => {
-      return (
-        <div>
-            <Dashboard dashboardLinkProp={activeURL} displayTabs={displayTabs} idleCount={idleCount} onDashboardReady={handleDashboardReady}></Dashboard>
-        </div>
-      )
-    };
-    
-    const rendeToolbar = () => {  
-      
+  const handleClearTopFilters = () => {
+    if (!vizReady || filterLoading) {
+      return;
     }
-    const setSelectedClient = (event) => {
-      var newFilteredNav = sortedNav.filter(([key, value]) => value.client === event);
-      const flatNav = flattenNav(newFilteredNav);
-      var buttons = flatNav.map(n => n.label);
-      var links = flatNav.map(n => n.link);
-      var dashboardids = flatNav.map(n => n.id);
+    const viz = vizRef.current;
+    if (!viz) {
+      return;
+    }
+    validUserContext.localAuthCheck(false);
+    const dashboardKey = activeURLRef.current;
+    const newSelections = {};
+    if (filterSelections[CATEGORY_FILTER] !== undefined) {
+      newSelections[CATEGORY_FILTER] = filterSelections[CATEGORY_FILTER];
+    }
+    const seq = ++filterOpSeqRef.current;
+    setFilterSelections(newSelections);
+    showCachedFor(dashboardKey, newSelections);
+    setFilterLoading(true);
 
-      setVizReady(false)
-      filterOpSeqRef.current++
-      setDashboardFilters(getCachedFilters(links[0]))
-      setFilterSelections({})
-      setDefaultGroup(event);
-      setCurrentButtons(buttons);
-      setCurrentLinks(links);
-      setCurrentIds(dashboardids);
-      setActiveButton(0);
-      setActiveURL(links[0]);
-      setActiveDashboardId(dashboardids[0]);
-    };
-    
-    
-    const renderDetailsOverlay = () => {
-      if (!detailsOverlayOpen) {
+    enqueueVizOp(async () => {
+      try {
+        for (const name of TOP_FILTER_ORDER) {
+          const downstreamFilter = resolveFilterMeta(name);
+          await applyFilterValue(viz, downstreamFilter, "__ALL__");
+        }
+      } finally {
+        setFilterLoading(false);
+      }
+      await backgroundRefresh(viz, dashboardKey, newSelections, seq);
+    });
+  };
+
+  const buildDetailsUrl = (segments) => {
+    const encoded = segments.map((s) => encodeURIComponent(s)).join("/");
+    return `https://storage.googleapis.com/bp_portal_artifacts/details/${encoded}/display.jpg`;
+  };
+
+  const getDetailsCandidateSegments = () => {
+    const client = clientGroup || defaultGroup;
+    const filterSegments = FILTER_ORDER.filter(
+      (name) => filterSelections[name] !== undefined
+    ).map((name) => filterSelections[name]);
+    return [client, ...filterSegments];
+  };
+
+  const handleOpenDetails = () => {
+    setDetailsImageUrl(buildDetailsUrl(getDetailsCandidateSegments()));
+    setDetailsOverlayOpen(true);
+  };
+
+  const handleDetailsImageError = () => {
+    setDetailsImageUrl((current) => {
+      if (!current) {
         return null;
       }
-      const selectionCrumbs = FILTER_ORDER
-        .filter((name) => filterSelections[name] !== undefined)
-        .map((name) => filterSelections[name]);
-
-      return (
-        <div className={classes.detailsOverlay} onClick={() => setDetailsOverlayOpen(false)}>
-          <div className={classes.detailsModal} onClick={(e) => e.stopPropagation()}>
-            <div className={classes.detailsModalHeader}>
-              <div className={classes.detailsBreadcrumb}>
-                {[defaultGroup, ...selectionCrumbs].join(" › ")}
-              </div>
-              <button
-                className={classes.detailsCloseBtn}
-                onClick={() => setDetailsOverlayOpen(false)}
-                aria-label="Close"
-              >
-                ✕
-              </button>
-            </div>
-            <div className={classes.detailsModalBody}>
-              {detailsImageUrl ? (
-                <img
-                  className={classes.detailsImage}
-                  src={detailsImageUrl}
-                  alt="Details"
-                  onError={handleDetailsImageError}
-                />
-              ) : (
-                <div className={classes.detailsNoContent}>
-                  <div>No details available for this selection.</div>
-                  <div className={classes.detailsDebugUrl}>
-                    Last attempted URL:<br />
-                    {buildDetailsUrl(getDetailsCandidateSegments())}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      );
-    };
-
-    const renderButtons = () => {  
-      return currentButtons.map((buttonText, index) => {
-        const isActive = activeButton === index;
-        const selectionSummary = isActive && activeDashboard
-          ? FILTER_ORDER
-              .filter((name) => filterSelections[name] !== undefined)
-              .map((name) => filterSelections[name])
-              .join(' · ')
-          : '';
-
-        return (
-          <div key={index}>
-            <div
-              className={`${classes.sideButton} ${isActive ? classes.active : ''}`}
-              onClick={() => handleButtonClick(index, buttonText)}
-            >
-              {buttonText.replace(/^\d+\.\s*/, '')}
-            </div>
-            {selectionSummary ? (
-              <div className={classes.filterSummaryChip}>{selectionSummary}</div>
-            ) : null}
-          </div>
-        );
-      });
-    };
-
-    // Context bar: inline cascade dropdowns rendered above the viz.
-    // Each dropdown is disabled until the previous filter in the cascade has
-    // a value — preserving the cascade logic without blocking the view.
-    const renderContextBar = () => {
-      const orderedFilters = orderFilters(dashboardFilters);
-      if (orderedFilters.length === 0 || !activeDashboard) {
+      const base = "https://storage.googleapis.com/bp_portal_artifacts/details/";
+      const withoutBase = current.replace(base, "").replace("/display.jpg", "");
+      const parts = withoutBase.split("/").map(decodeURIComponent);
+      if (parts.length <= 2) {
         return null;
       }
-      const interactionDisabled = !vizReady;
-      const activeIndex = orderedFilters.findIndex(
-        (filter) => filterSelections[filter.fieldName] === undefined
-      );
-      const hasAnySelection = activeIndex > 0 || activeIndex === -1;
+      return buildDetailsUrl(parts.slice(0, -1));
+    });
+  };
 
-      return (
-        <div className={classes.contextBar}>
-          <div className={classes.contextBarFilters}>
-            {orderedFilters.map((filter, index) => {
-              const selected = filterSelections[filter.fieldName] ?? '';
-              // A filter is unlocked if it is the first one OR all filters before it have values.
-              const locked = index > activeIndex && activeIndex !== -1;
-              return (
-                <div className={classes.contextBarItem} key={filter.fieldName}>
-                  <label className={classes.contextBarLabel}>{filter.fieldName}</label>
-                  <div className={classes.contextBarSelectWrapper}>
-                    <select
-                      className={`${classes.contextBarSelect} ${locked ? classes.contextBarSelectLocked : ''}`}
-                      disabled={interactionDisabled || locked}
-                      value={selected}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (!val) {
-                          handleReopenFilter(filter, index);
-                        } else {
-                          handleFilterChange(filter, val, index);
-                        }
-                      }}
-                    >
-                      <option value="">— All —</option>
-                      {filter.values.map((value, valueIndex) => (
-                        <option key={valueIndex} value={value}>{value}</option>
-                      ))}
-                    </select>
-                    <span className={classes.contextBarArrow}>▾</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          {hasAnySelection && (
-            <button
-              className={`${classes.contextBarClear} ${interactionDisabled ? classes.contextBarClearDisabled : ''}`}
-              onClick={handleClearFilters}
-              disabled={interactionDisabled}
-            >
-              Clear
-            </button>
-          )}
-        </div>
-      );
-    };
-
-    var randomNumber = Math.floor(Math.random() * 1000000);
-
-
-    var logoKey = (clientGroup || defaultGroup).toLowerCase();
-    var companyLink = `https://storage.googleapis.com/bp_portal_artifacts/${logoKey}.png?v=${randomNumber}`
-    
-    var defaultLink = `https://storage.googleapis.com/bp_portal_artifacts/bradleypayne.png?v=${randomNumber}`
-    const handleError = (event) => {
-      event.target.src = defaultLink;
-    };
-
-    const renderFull = () => {
-      return (
-          <div className={`${classes.landing}`}>
-          {renderDetailsOverlay()}
-
-            <div className={`${menuOpen ? classes.sidebar : classes.sidebarClosed} `}
-                  ref={containerRef}>
-            <div className={`${classes.sidebartop}`}>
-
-              <div className={`${classes.sidebarlogoCircle}`}>
-                <img className={classes.sidebarlogo} src={companyLink} onError={handleError}></img>
-              </div>
-              <div className={classes.sideState}>
-                {group === "Admin" ? (
-                  <div className={classes.selectDropdownWrapper}>
-                    <select
-                      value={defaultGroup}
-                      onChange={(e) => setSelectedClient(e.target.value)}
-                      className={classes.selectDropdown}
-                    >
-                      {clientList.map((client, index) => (
-                        <option key={index} value={client}>
-                          {client}
-                        </option>
-                      ))}
-                    </select>
-                    <span className={classes.selectArrow}>▼</span>
-                  </div>
-                ) : (
-                  <span>{logoKey}</span>
-                )}
-              </div>
-              {renderButtons()}
-            </div>
-            <div className={classes.sidebarBrand}>
-                <img src={bpLogoWhite} className={classes.sidebarBrandLogo} alt="Bradley Payne" />
-            </div>
-            <div className={`${classes.sidebarbottom}`}>
-                <div className={`${classes.userinfoCircle}`}>
-                    <ProfileCard />
-                </div>
-            </div>
-          </div>
-          <div className={`${menuOpen ? classes.contentblock : classes.contentblockMobile}`}>
-            <div className={`${classes.toolbar}`}>
-                {displayToolbarButtons? 
-                (
-                  <div className={classes.toolbarActions}>
-                      {filterSelections["Category"] !== undefined && (
-                        <>
-                          <button
-                            className={classes.detailsButton}
-                            onClick={handleOpenDetails}
-                            title="View details for current selection"
-                          >
-                            <svg className={classes.detailsIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <circle cx="12" cy="12" r="10"/>
-                              <line x1="12" y1="8" x2="12" y2="12"/>
-                              <line x1="12" y1="16" x2="12.01" y2="16"/>
-                            </svg>
-                            Details
-                          </button>
-                          <img className={classes.dividericon} src={dividerIcon} alt="" />
-                        </>
-                      )}
-                      <img
-                      className={classes.dividericon}
-                      src={dividerIcon}
-                      alt="Divider icon"
-                      ></img>
-                      <img
-                      className={classes.toolbarIcon}
-                      src={pdfIcon}
-                      alt="PDF icon"
-                      onClick={() => handleExportPDFClick()}
-                      ></img>
-                      <img
-                      className={classes.toolbarIcon}
-                      src={pngIcon}
-                      alt="PNG icon"
-                      onClick={() => handleExportPNGClick()}
-                      ></img>
-                      <img
-                      className={classes.toolbarIcon}
-                      src={pwrpIcon}
-                      alt="Power Point icon"
-                      onClick={() => handleExportPWRPClick()}
-                      ></img>
-                      <img
-                      className={classes.toolbarIcon}
-                      src={excelIcon}
-                      alt="Excel icon"
-                      onClick={() => handleCrossTabClick()}
-                      ></img>
-                      <img
-                      className={classes.dividericon}
-                      src={dividerIcon}
-                      alt="Divider icon"
-                      ></img>
-                      <img
-                      className={`${classes.toolbarIcon} ${classes.toolbarIconRefresh} ${refreshSpin ? classes.spin : ''}`}
-                      src={refreshIcon}
-                      alt="Refresh"
-                      onClick={() => handleTriggerRefresh()}
-                      ></img>
-                  </div>
-                ):(
-                  <div></div>
-                )
-                }
-            </div>
-            {renderContextBar()}
-            <div className={classes.dashboardblock} ref={dashboardRef} >
-                {renderContent()}
-            </div>
-          </div>
-          
-        </div>
-      )
+  const handleButtonClick = (tabIndex, tabText) => {
+    validUserContext.localAuthCheck(false);
+    setActiveButton(tabIndex);
+    setActiveURL(currentLinks[tabIndex]);
+    setActiveDashboard(true);
+    setActiveDashboardId(currentIds[tabIndex]);
+    setVizReady(false);
+    setFilterLoading(false);
+    filterOpSeqRef.current++;
+    setDashboardFilters(getCachedFilters(currentLinks[tabIndex]));
+    setFilterSelections({});
+    setDisplayTabs(false);
+    if (isMobileDevice()) {
+      setMenuOpen(false);
     }
+  };
 
-    const renderMobile = () => {
+  const handleMenuClick = () => {
+    setMenuOpen((open) => !open);
+  };
+
+  const renderContent = () => {
+    if (activeDashboard && activeURL) {
       return (
-            <div {...handlers} className={`${classes.landing}`}>
-                {renderDetailsOverlay()}
-                {menuOpen && <div  className={classes.overlay} />} {/* Add the overlay */}
-                <div  ref={sidebarRef} className={`${menuOpen ? classes.sidebar : classes.sidebarClosed}`}>
-                  <div className={`${classes.sidebartop}`}>
-                    <div className={`${classes.sidebarlogoCircle}`}>
-                      <img className={classes.sidebarlogo} src={companyLink} onError={handleError}></img>
-                    </div>
-                    <div className={classes.sideState}>
-                      {group === "Admin" ? (
-                        <div className={classes.selectDropdownWrapper}>
-                          <select
-                            value={defaultGroup}
-                            onChange={(e) => setSelectedClient(e.target.value)}
-                            className={classes.selectDropdown}
-                          >
-                            {clientList.map((client, index) => (
-                              <option key={index} value={client}>
-                                {client}
-                              </option>
-                            ))}
-                          </select>
-                          <span className={classes.selectArrow}>▼</span>
-                        </div>
-                      ) : (
-                        <span>{defaultGroup}</span>
-                      )}
-                    </div>                  
-                    {/* <div className={`${classes.sideState}`}>{defaultGroup}</div> */}
-                    {renderButtons()}
-                  </div> 
-                  <div className={classes.sidebarBrand}>
-                      <img src={bpLogoWhite} className={classes.sidebarBrandLogo} alt="Bradley Payne" />
-                  </div>
-                  <div className={`${classes.sidebarbottom}`}>
-                    <div className={`${classes.userinfoCircle}`}>
-                        <ProfileCard />
-                    </div>
-                  </div>
-                </div>
-                <div className={`${classes.contentblockMobile}`}>
-                  <div className={`${classes.toolbar}`}>
-                      <img
-                        className={classes.menuicon}
-                        src={menuIcon}
-                        alt="Menu icon"
-                        htmlFor="menu-click"
-                        onClick={() => handleMenuClick()}
-                      ></img>
-                  </div>
-                  <div className={classes.dashboardblock} ref={dashboardRef} >
-                      {renderContent()}
-                  </div>
-                </div>
-            </div>
-      )
+        <Dashboard
+          dashboardLinkProp={activeURL}
+          displayTabs={displayTabs}
+          idleCount={idleCount}
+          onDashboardReady={handleDashboardReady}
+        />
+      );
     }
+    return <div />;
+  };
 
+  const setSelectedClient = (event) => {
+    const newFilteredNav = sortedNav.filter(([, value]) => value.client === event);
+    const nextFlat = flattenNav(newFilteredNav);
+    const nextButtons = nextFlat.map((n) => n.label);
+    const nextLinks = nextFlat.map((n) => n.link);
+    const nextIds = nextFlat.map((n) => n.id);
 
-    // var jwtToken = JSON.parse(localStorage.getItem("tableau-login-data"));
-    // localStorage.setItem("tableau-login-data", JSON.stringify("redeemed"));
+    setVizReady(false);
+    setFilterLoading(false);
+    filterOpSeqRef.current++;
+    setDashboardFilters(getCachedFilters(nextLinks[0]));
+    setFilterSelections({});
+    setDefaultGroup(event);
+    setCurrentButtons(nextButtons);
+    setCurrentLinks(nextLinks);
+    setCurrentIds(nextIds);
+    setActiveButton(0);
+    setActiveURL(nextLinks[0]);
+    setActiveDashboardId(nextIds[0]);
+  };
 
-    // var inputProps = {
-    // };
-    
-    // if (jwtToken != "redeemed") {
-    //   inputProps.token = jwtToken;
-    // }
+  const renderDetailsOverlay = () => {
+    if (!detailsOverlayOpen) {
+      return null;
+    }
+    const selectionCrumbs = FILTER_ORDER.filter(
+      (name) => filterSelections[name] !== undefined
+    ).map((name) => filterSelections[name]);
 
     return (
-      <div>
-        {isMobileDevice() ?
-          renderMobile()
-          :
-          renderFull()
-        }
+      <div className={classes.detailsOverlay} onClick={() => setDetailsOverlayOpen(false)}>
+        <div className={classes.detailsModal} onClick={(e) => e.stopPropagation()}>
+          <div className={classes.detailsModalHeader}>
+            <div className={classes.detailsBreadcrumb}>
+              {[defaultGroup, ...selectionCrumbs].join(" › ")}
+            </div>
+            <button
+              className={classes.detailsCloseBtn}
+              onClick={() => setDetailsOverlayOpen(false)}
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          </div>
+          <div className={classes.detailsModalBody}>
+            {detailsImageUrl ? (
+              <img
+                className={classes.detailsImage}
+                src={detailsImageUrl}
+                alt="Details"
+                onError={handleDetailsImageError}
+              />
+            ) : (
+              <div className={classes.detailsNoContent}>
+                <div>No details available for this selection.</div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     );
   };
-  
-  export default Landing;
+
+  const glanceItems = currentButtons
+    .map((label, index) => ({ label, index }))
+    .filter(({ label }) => !isFundingNavLabel(label));
+  const fundingItems = currentButtons
+    .map((label, index) => ({ label, index }))
+    .filter(({ label }) => isFundingNavLabel(label));
+
+  const departmentValues = getDepartmentValues(activeURL, dashboardFilters);
+  const selectedDepartment = filterSelections[CATEGORY_FILTER];
+  const topFilters = orderTopFilters(dashboardFilters);
+  const hasTopSelection = TOP_FILTER_ORDER.some(
+    (name) => filterSelections[name] !== undefined
+  );
+
+  const randomNumber = Math.floor(Math.random() * 1000000);
+  const logoKey = (clientGroup || defaultGroup).toLowerCase();
+  const displayName = clientGroup || defaultGroup;
+  const companyLink = `https://storage.googleapis.com/bp_portal_artifacts/${logoKey}.png?v=${randomNumber}`;
+  const defaultLink = `https://storage.googleapis.com/bp_portal_artifacts/bradleypayne.png?v=${randomNumber}`;
+
+  const handleLogoError = (event) => {
+    event.target.src = defaultLink;
+  };
+
+  const renderSidebarNav = () => (
+    <>
+      <div className={classes.navSection}>
+        <div className={classes.navSectionTitle}>At a Glance</div>
+        {glanceItems.map(({ label, index }) => (
+          <div
+            key={`glance-${index}`}
+            className={`${classes.sideButton} ${
+              activeButton === index && !selectedDepartment ? classes.active : ""
+            }`}
+            onClick={() => handleButtonClick(index, label)}
+          >
+            {label.replace(/^\d+\.\s*/, "")}
+          </div>
+        ))}
+      </div>
+
+      <div className={classes.navSection}>
+        <div className={classes.navSectionTitle}>Departments</div>
+        {departmentValues.length === 0 ? (
+          <div className={classes.navEmpty}>Loading departments…</div>
+        ) : (
+          departmentValues.map((value) => (
+            <div
+              key={value}
+              className={`${classes.sideButton} ${
+                selectedDepartment === value ? classes.active : ""
+              } ${filterLoading ? classes.sideButtonDisabled : ""}`}
+              onClick={() => handleDepartmentSelect(value)}
+            >
+              {value}
+            </div>
+          ))
+        )}
+      </div>
+
+      {fundingItems.length > 0 && (
+        <div className={classes.navSection}>
+          <div className={classes.navSectionTitle}>Funding</div>
+          {fundingItems.map(({ label, index }) => (
+            <div
+              key={`funding-${index}`}
+              className={`${classes.sideButton} ${
+                activeButton === index && !selectedDepartment ? classes.active : ""
+              }`}
+              onClick={() => handleButtonClick(index, label)}
+            >
+              {label.replace(/^\d+\.\s*/, "")}
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+
+  const renderTopFilters = () => {
+    if (!activeDashboard) {
+      return null;
+    }
+    const interactionDisabled = !vizReady || filterLoading;
+    const filtersToShow =
+      topFilters.length > 0
+        ? topFilters
+        : TOP_FILTER_ORDER.map((fieldName) => ({
+            fieldName,
+            values: [],
+            worksheetNames: [],
+          }));
+
+    return (
+      <div className={classes.contextBar}>
+        <div className={classes.contextBarFilters}>
+          <span className={classes.contextBarLabel}>Filter by</span>
+          {filtersToShow.map((filter) => {
+            const selected = filterSelections[filter.fieldName] ?? "";
+            return (
+              <div className={classes.contextBarItem} key={filter.fieldName}>
+                <div className={classes.contextBarSelectWrapper}>
+                  <select
+                    className={classes.contextBarSelect}
+                    disabled={interactionDisabled || !(filter.values || []).length}
+                    value={selected}
+                    onChange={(e) => handleTopFilterChange(filter, e.target.value)}
+                  >
+                    <option value="">
+                      All {filter.fieldName.replace(/Type$/, "Types")}
+                    </option>
+                    {(filter.values || []).map((value, valueIndex) => (
+                      <option key={valueIndex} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                  <span className={classes.contextBarArrow}>▾</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {hasTopSelection && (
+          <button
+            className={`${classes.contextBarClear} ${
+              interactionDisabled ? classes.contextBarClearDisabled : ""
+            }`}
+            onClick={handleClearTopFilters}
+            disabled={interactionDisabled}
+          >
+            Clear
+          </button>
+        )}
+        {filterSelections[CATEGORY_FILTER] !== undefined && (
+          <button
+            className={classes.detailsButton}
+            onClick={handleOpenDetails}
+            title="View details for current selection"
+            type="button"
+          >
+            Details
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  const renderAppTopBar = () => (
+    <header className={classes.appTopBar}>
+      <div className={classes.appTopBarLeft}>
+        {isMobileDevice() && (
+          <img
+            className={classes.menuicon}
+            src={menuIcon}
+            alt="Menu"
+            onClick={handleMenuClick}
+          />
+        )}
+        <img
+          className={classes.appTopBarLogo}
+          src={companyLink}
+          alt={displayName}
+          onError={handleLogoError}
+        />
+        <div className={classes.appTopBarText}>
+          <div className={classes.appTopBarTitle}>
+            {displayName}
+            <span className={classes.appTopBarSep}>|</span>
+            <span className={classes.appTopBarTag}>Empower · Challenge · Support</span>
+          </div>
+          <div className={classes.appTopBarSub}>
+            Capital Plan Portal · FY 2026–2035
+          </div>
+        </div>
+      </div>
+      <div className={classes.appTopBarActions}>
+        <button
+          type="button"
+          className={classes.appTopBarBtn}
+          onClick={() => setPortalView("home")}
+        >
+          ← Portal
+        </button>
+        <button
+          type="button"
+          className={classes.appTopBarBtnPrimary}
+          onClick={handleExportPNGClick}
+        >
+          Export Capital Plan
+        </button>
+        <button type="button" className={classes.appTopBarBtn} onClick={handleLogoutClick}>
+          Log out
+        </button>
+      </div>
+    </header>
+  );
+
+  const renderEmbedShell = () => (
+    <div className={classes.landing}>
+      {renderDetailsOverlay()}
+      {renderAppTopBar()}
+      <div className={classes.embedBody}>
+        {isMobileDevice() && menuOpen && <div className={classes.overlay} />}
+        <div
+          ref={(node) => {
+            sidebarRef.current = node;
+            containerRef.current = node;
+          }}
+          className={`${menuOpen ? classes.sidebar : classes.sidebarClosed}`}
+        >
+          <div className={classes.sidebartop}>
+            {group === "Admin" && (
+              <div className={classes.sideState}>
+                <div className={classes.selectDropdownWrapper}>
+                  <select
+                    value={defaultGroup}
+                    onChange={(e) => setSelectedClient(e.target.value)}
+                    className={classes.selectDropdown}
+                  >
+                    {clientList.map((client, index) => (
+                      <option key={index} value={client}>
+                        {client}
+                      </option>
+                    ))}
+                  </select>
+                  <span className={classes.selectArrow}>▼</span>
+                </div>
+              </div>
+            )}
+            {renderSidebarNav()}
+          </div>
+          <div className={classes.sidebarBrand}>
+            <div className={classes.poweredByLabel}>Powered by</div>
+            <img src={oarLogo} className={classes.sidebarBrandLogo} alt="OAR" />
+          </div>
+        </div>
+        <div
+          className={`${
+            menuOpen && !isMobileDevice()
+              ? classes.contentblock
+              : classes.contentblockMobile
+          }`}
+        >
+          {renderTopFilters()}
+          <div className={classes.dashboardblock} ref={dashboardRef}>
+            {filterLoading && (
+              <div className={classes.filterLoadingOverlay} aria-live="polite">
+                <div className={classes.filterLoadingCard}>
+                  <div className={classes.filterLoadingSpinner} />
+                  <div className={classes.filterLoadingText}>Updating view…</div>
+                </div>
+              </div>
+            )}
+            {renderContent()}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (portalView === "home") {
+    return (
+      <PortalHome
+        clientName={displayName}
+        clientLogoUrl={companyLink}
+        fallbackLogoUrl={defaultLink}
+        heroImageUrl={heroFallback}
+        onOpenCapitalPlan={() => setPortalView("capital-plan")}
+        onLogout={handleLogoutClick}
+      />
+    );
+  }
+
+  return isMobileDevice() ? (
+    <div {...handlers}>{renderEmbedShell()}</div>
+  ) : (
+    renderEmbedShell()
+  );
+};
+
+export default Landing;

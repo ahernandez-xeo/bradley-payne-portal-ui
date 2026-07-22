@@ -3,18 +3,18 @@
 @import "../extensions";
 
 .form {
-  display: -ms-grid;
   display: grid;
-  width: 380px;
+  width: 420px;
   margin: 0;
   background-color: $surface-white;
-  border: 1px solid $border-color;
-  border-top: 4px solid $accent-theme;
-  border-radius: 0 0 8px 8px;
-  box-shadow: 0 8px 30px rgba(42, 48, 55, 0.1);
-  padding: 32px 36px 28px;
+  border: 1px solid #e3e7eb;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(42, 48, 55, 0.1);
+  padding: 36px 40px 32px;
+  box-sizing: border-box;
   @include media-max-width() {
     width: 90%;
+    padding: 28px 24px 24px;
   }
 }
 
@@ -25,15 +25,16 @@ input {
 
 .input {
   @extend .mainInputStyle;
-  border: 1px solid $border-color;
-  border-radius: 4px;
+  border: 1px solid #d0d5da;
+  border-radius: 8px;
   margin-top: $main-margin;
   outline: 2px solid transparent;
   outline-offset: 0;
   color: var(--text-strong);
-  background-color: $surface-muted;
+  background-color: $surface-white;
   font-size: 15px;
   font-weight: 500;
+  height: 46px;
   transition: border-color 0.2s, box-shadow 0.2s;
 
   &:focus {
@@ -43,18 +44,19 @@ input {
     outline: none;
   }
 }
+
 .loginBtn {
   @extend .mainInputStyle;
-  margin-top: 21px;
-  font-size: 16px;
-  letter-spacing: 0.5px;
+  margin-top: 24px;
+  font-size: 15px;
+  letter-spacing: 0.8px;
   text-transform: uppercase;
   color: var(--client-accent-contrast);
-  height: 45px;
+  height: 48px;
   background-color: $accent-theme;
   border: none;
-  border-radius: 4px;
-  margin-bottom: 20px;
+  border-radius: 8px;
+  margin-bottom: 4px;
   font-weight: 700;
   cursor: pointer;
   transition: background-color 0.2s;
@@ -64,37 +66,17 @@ input {
   &:hover {
     background-color: var(--accent-strong);
   }
-}
-
-.loginBtnDisabled {
-  @extend .mainInputStyle;
-  margin-top: 21px;
-  font-size: 16px;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  color: $text-muted;
-  height: 45px;
-  background-color: $surface-muted;
-  border: 1px solid $border-color;
-  border-radius: 4px;
-  margin-bottom: 20px;
-  cursor: not-allowed;
-  &:active {
-    opacity: 50%;
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 }
 
-.icon {
-  position: absolute;
-  margin-top: $main-margin * 2;
-  margin-left: $main-margin * 1;
-}
-
 .forgot {
-  font-size: 12px;
-  font-weight: lighter;
+  font-size: 13px;
+  font-weight: 400;
   color: var(--text-body);
-  margin-top: 15px;
+  margin-top: 14px;
   text-align: left;
   text-decoration: underline;
   cursor: pointer;
@@ -102,7 +84,7 @@ input {
 
 .loginInstructions {
   margin-top: 0;
-  margin-bottom: 20px;
+  margin-bottom: 8px;
   font-size: 15px;
   font-weight: 400;
   color: $text-muted;
@@ -110,74 +92,6 @@ input {
   line-height: 1.5;
 }
 
-.bottomtext {
-  margin-top: 59px;
-  font-size: 13px;
-  font-weight: normal;
-  color: $text-muted;
-  text-align: center;
-  width: 556px;
-}
-
-.modal {
-  top: '50%';
-  left: '50%';
-  right: 'auto';
-  bottom: 'auto';
-  margin-right: '-50%';
-  transform: 'translate(-50%, -50%)';
-}
-
-.logincontainer{
+.logincontainer {
   display: contents;
-}
-
-.alerticon {
-  height: 30px;
-}
-
-.modaltext {
-  color: black;
-}
-
-.backButton {
-  margin-top: 45px;
-  font-size: 16px;
-  font-weight: normal;
-  color: var(--text-body);
-}
-
-.backButton:hover {
-  cursor: pointer;
-}
-
-.loginBottomLogo {
-  margin-top: 50px;
-  width: 280px;
-  cursor: pointer;
-}
-
-.disclaimer {
-  font-size: 11px; 
-  color: $text-muted;
-  max-width: 50%;
-}
-
-
-.rememberMe {
-  font-size: 13px; 
-  color: $text-muted;
-  max-width: 50%;
-  margin-top: 20px;
-  left: -80px;
-  position: relative;
-}
-
-
-@media only screen and (max-width: 600px) {
-  .disclaimer {
-    font-size: 9px; 
-    color: $text-muted;
-    max-width: 90%;
-  }
 }

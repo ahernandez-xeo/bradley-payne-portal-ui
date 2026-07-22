@@ -1,30 +1,27 @@
 import classes from "./LoginHead.module.scss";
-import bpLogo from "../assets/BradleyPayne-logo.png";
-import { useContext} from "react";
+import bpLogo from "../assets/BP-Oar-Logo-Replit.png";
+import irgLogo from "../assets/incentive-review-group-logo-replit.png";
+import { useContext } from "react";
 import ValidUserContext from "../authCheck";
 
 function LoginHead() {
   const validUserContext = useContext(ValidUserContext);
 
   const handleReset = () => {
-    validUserContext.reset()
-  }
-  var actionText = 'Sign In'
-  if(validUserContext.isForgotPwd) {
-    actionText = ''
-  } else if (validUserContext.pwdResetTokenValue){
-    actionText = ''
-  } else if (validUserContext.newUserTokenValue){
-    actionText = ''
-  }
+    validUserContext.reset();
+  };
 
   return (
     <div className={classes.loginHeadWrapper}>
-      <a href="/" onClick={handleReset}>
-        <img className={classes.loginLogo} src={bpLogo} alt="Bradley Payne Advisors" />
+      <a href="/" onClick={handleReset} className={classes.logoRow}>
+        <img className={classes.loginLogo} src={bpLogo} alt="Bradley Payne" />
+        <span className={classes.logoDivider} aria-hidden="true" />
+        <img
+          className={classes.loginLogoIrg}
+          src={irgLogo}
+          alt="Incentive Review Group"
+        />
       </a>
-      <div className={classes.tagline}>Client Portal</div>
-      {actionText ? <div className={classes.loginTitle}>{actionText}</div> : null}
     </div>
   );
 }

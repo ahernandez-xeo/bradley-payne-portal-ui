@@ -197,6 +197,155 @@
     z-index: 10;
   }
 
+  // ── App shell (post-redesign) ──────────────────────────────────────────────
+
+  $header-yellow: #e6b422;
+  $app-top-bar-height: 68px;
+
+  .appTopBar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1100;
+    height: $app-top-bar-height;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 0 20px;
+    background: $surface-white;
+    border-bottom: 3px solid $header-yellow;
+  }
+
+  .appTopBarLeft {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .appTopBarLogo {
+    width: 42px;
+    height: 42px;
+    object-fit: contain;
+    border-radius: 50%;
+    border: 1px solid $border-color;
+    background: $surface-white;
+    flex-shrink: 0;
+  }
+
+  .appTopBarText {
+    min-width: 0;
+    text-align: left;
+  }
+
+  .appTopBarTitle {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-strong);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .appTopBarSep {
+    margin: 0 8px;
+    color: #c5cbd2;
+    font-weight: 400;
+  }
+
+  .appTopBarTag {
+    font-weight: 500;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  .appTopBarSub {
+    margin-top: 2px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .appTopBarActions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .appTopBarBtn,
+  .appTopBarBtnPrimary {
+    appearance: none;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .appTopBarBtn {
+    background: $surface-white;
+    border: 1px solid #d0d5da;
+    color: var(--text-body);
+
+    &:hover {
+      border-color: $accent-theme;
+      color: $accent-theme;
+    }
+  }
+
+  .appTopBarBtnPrimary {
+    background: $accent-theme;
+    border: 1px solid $accent-theme;
+    color: #fff;
+
+    &:hover {
+      background: var(--accent-strong);
+    }
+  }
+
+  .embedBody {
+    padding-top: $app-top-bar-height;
+    min-height: 100vh;
+    box-sizing: border-box;
+  }
+
+  .navSection {
+    padding: 14px 0 8px;
+    text-align: left;
+  }
+
+  .navSectionTitle {
+    padding: 0 18px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: $header-yellow;
+  }
+
+  .navEmpty {
+    padding: 8px 18px;
+    font-size: 12px;
+    color: $nav-label;
+  }
+
+  .poweredByLabel {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: $nav-label;
+    margin-bottom: 4px;
+  }
+
   .toolbarActions {
     display: flex;
     align-items: center;
@@ -204,27 +353,23 @@
   }
 
   .contentblock {
-    //margin-left: 300px;
-    //calc( (100vw - 300px));
-    //display: block;
     margin-left: 240px;
     display: block;
-    height: calc( (100vh ));
-    width: calc( (100vw - 240px));
+    height: calc(100vh - 68px);
+    width: calc(100vw - 240px);
     display: inline-block;
     position: fixed !important;
+    top: 68px;
     z-index: 1;
   }
 
   .contentblockMobile {
-    //margin-left: 300px;
-    //calc( (100vw - 300px));
-    //display: block;
     display: block;
-    height: calc( (100vh ));
+    height: calc(100vh - 68px);
     width: 100vw;
     display: inline-block;
     position: fixed !important;
+    top: 68px;
     z-index: 1;
   }
 
@@ -244,18 +389,64 @@
     width: 100%;
     fill: black;
     display: inline-block;
-    height: calc(100vh - 112px); // 60px toolbar + 52px context bar
+    height: calc(100vh - 68px - 52px);
     background-color: $back-color;
     overflow: auto;
-    // border-top-left-radius: 1%;
+    position: relative;
+  }
+
+  .filterLoadingOverlay {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(238, 241, 244, 0.72);
+    backdrop-filter: blur(1px);
+  }
+
+  .filterLoadingCard {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    padding: 22px 28px;
+    background: $surface-white;
+    border: 1px solid $border-color;
+    border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(30, 40, 55, 0.12);
+  }
+
+  .filterLoadingSpinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid rgba(0, 110, 99, 0.18);
+    border-top-color: $accent-theme;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  .filterLoadingText {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-body);
+    letter-spacing: 0.2px;
+  }
+
+  .sideButtonDisabled {
+    opacity: 0.55;
+    pointer-events: none;
   }
 
   .sidebar {
     width: 240px;
-    height: 100vh;
+    height: calc(100vh - 68px);
+    top: 68px;
     background-color: $slate-theme;
     border-right: 1px solid $border-color;
-    display: block;
+    display: flex;
+    flex-direction: column;
     position: fixed!important;
     z-index: 1001;
     overflow: hidden;
@@ -264,13 +455,10 @@
     text-align: center;
   }
 
-  .withscrollbar {
-    margin-left: -11px;
-  }
-
   .sidebarClosed {
     width: 0px;
-    height: 100vh;
+    height: calc(100vh - 68px);
+    top: 68px;
     background-color: $slate-theme;
     display: block;
     position: fixed!important;
@@ -279,17 +467,22 @@
   }
 
   .sidebarBrand {
-    height: 56px;
+    height: auto;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 0 20px;
+    padding: 12px 20px 20px;
     flex-shrink: 0;
-    margin-top: 16px;
+    margin-top: auto;
+    border-top: 1px solid $nav-divider;
   }
 
   .sidebarBrandLogo {
-    height: 120px;
+    height: 56px;
+    width: auto;
+    max-width: 160px;
+    object-fit: contain;
   }
 
   .sidebarlogo {
@@ -524,9 +717,10 @@
 }
 
 .sidebartop {
-  height: calc(100vh - 188px);
-  overflow-y: scroll;
+  flex: 1;
+  overflow-y: auto;
   overflow-x: hidden;
+  min-height: 0;
 }
 
 .sidebarbottom {

@@ -18,9 +18,14 @@ const Dashboard = ({dashboardLinkProp, displayTabs, onDashboardReady}) => {
     ]);
     const elementRef = useRef();
     const linkRef = useRef(dashboardLink);
+    const onDashboardReadyRef = useRef(onDashboardReady);
 
     const validUserContext = useContext(ValidUserContext);
     console.log("prop: "+dashboardLink);
+
+    useEffect(() => {
+      onDashboardReadyRef.current = onDashboardReady;
+    }, [onDashboardReady]);
 
     const isMobileDevice = () => {
       return /Mobi|Android/i.test(navigator.userAgent);
@@ -52,10 +57,12 @@ const Dashboard = ({dashboardLinkProp, displayTabs, onDashboardReady}) => {
     }, [dashboardLinkProp]);
 
     useEffect(() => {
-        var viz = elementRef.current;
-        var link = dashboardLink
-        console.log(`Listener added`);
-        viz.addEventListener("firstinteractive", async (event) => {
+        const viz = elementRef.current;
+        if (!viz) {
+          return;
+        }
+
+        const handleFirstInteractive = async () => {
             console.log(`Dashboard Loaded`);
             console.log("effect: "+linkRef.current)
             var sheets = viz.workbook.publishedSheetsInfo;
@@ -79,17 +86,22 @@ const Dashboard = ({dashboardLinkProp, displayTabs, onDashboardReady}) => {
 
             setLoaded(true);
             setActiveTab(activeTabIndex);
-            viz.refreshDataAsync()
-            if (onDashboardReady) {
-              onDashboardReady(viz);
+            try {
+              await viz.refreshDataAsync();
+            } catch (error) {
+              console.error("Error refreshing viz on load:", error);
             }
-        });
-        // viz.addEventListener("tabswitched", async (event) => {
-        //     setActiveTab(tabArray.indexOf(event.detail.newSheetName))
-        // });
-        /*
+            if (onDashboardReadyRef.current) {
+              onDashboardReadyRef.current(viz);
+            }
+        };
 
-        */
+        console.log(`Listener added`);
+        viz.addEventListener("firstinteractive", handleFirstInteractive);
+
+        return () => {
+          viz.removeEventListener("firstinteractive", handleFirstInteractive);
+        };
       }, []);
 
 
