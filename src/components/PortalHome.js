@@ -43,6 +43,10 @@ const PortalHome = ({
   onOpenCapitalPlan,
   onOpenAdmin,
   showAdmin,
+  districts = [],
+  selectedDistrictId = "",
+  onDistrictChange,
+  districtSwitching = false,
   onLogout,
 }) => {
   const handleLogoError = (event) => {
@@ -67,6 +71,23 @@ const PortalHome = ({
           </div>
         </div>
         <div className={classes.topBarActions}>
+          {showAdmin && districts.length > 0 && (
+            <label className={classes.clientSelect}>
+              <span className={classes.clientSelectLabel}>Client</span>
+              <select
+                value={selectedDistrictId}
+                onChange={(event) => onDistrictChange?.(event.target.value)}
+                disabled={districtSwitching || !onDistrictChange}
+                aria-label="Impersonate client district"
+              >
+                {districts.map((district) => (
+                  <option key={district.district_id} value={district.district_id}>
+                    {district.district_name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           {showAdmin && (
             <button type="button" className={classes.adminBtn} onClick={onOpenAdmin}>
               Admin

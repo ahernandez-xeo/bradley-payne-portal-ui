@@ -13,6 +13,7 @@ import {
   fetchAdminDistricts,
   fetchDistrictBranding,
   fetchDashboardFilters,
+  impersonateDistrict,
 } from "./ApiService";
 
 const SITE_ADMIN_ROLE = "SiteAdministratorCreator";
@@ -268,7 +269,16 @@ const Landing = ({ idleCountParam }) => {
   const [embedContent, setEmbedContent] = useState("dashboard"); // dashboard | timeline
   const [activeNavRole, setActiveNavRole] = useState("overview"); // overview | detail | forecast | financing | timeline
   const [menuOpen, setMenuOpen] = useState(!isMobileDevice());
-  const [adminDistrictNames, setAdminDistrictNames] = useState([]);
+  const [adminDistricts, setAdminDistricts] = useState([]);
+  const [selectedDistrictId, setSelectedDistrictId] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("district_id")) || "";
+    } catch {
+      return "";
+    }
+  });
+  const [districtSwitching, setDistrictSwitching] = useState(false);
+  const [vizRemountKey, setVizRemountKey] = useState(0);
   const [brandLogoUrl, setBrandLogoUrl] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem("logo_url")) || "";
@@ -293,7 +303,7 @@ const Landing = ({ idleCountParam }) => {
   const [displayTabs, setDisplayTabs] = useState(false);
 
   const [defaultGroup, setDefaultGroup] = useState(() => {
-    if (group === "Admin") {
+    if (group === "Admin" || isSiteAdmin) {
       return clientGroup || "default";
     }
     return clientGroup || group;
@@ -399,31 +409,51 @@ const Landing = ({ idleCountParam }) => {
   }, [idleCountParam]);
 
   useEffect(() => {
-    if (group !== "Admin") {
+    if (!isSiteAdmin && group !== "Admin") {
       return undefined;
     }
     let cancelled = false;
     fetchAdminDistricts()
       .then((data) => {
         if (cancelled) return;
-        const names = (data.districts || [])
-          .map((d) => d.district_name)
-          .filter(Boolean);
-        setAdminDistrictNames(names);
+        const list = (data.districts || []).filter(
+          (d) => d.district_id && d.district_name
+        );
+        setAdminDistricts(list);
+        setSelectedDistrictId((current) => {
+          if (current && list.some((d) => d.district_id === current)) {
+            return current;
+          }
+          const byName = list.find((d) => d.district_name === clientGroup);
+          return byName?.district_id || list[0]?.district_id || "";
+        });
         setDefaultGroup((current) => {
+          const names = list.map((d) => d.district_name);
           if (names.includes(current)) return current;
-          return names[0] || clientGroup || current || "default";
+          return (
+            list.find((d) => d.district_id === selectedDistrictId)?.district_name ||
+            clientGroup ||
+            list[0]?.district_name ||
+            current ||
+            "default"
+          );
         });
       })
       .catch(() => {
         if (!cancelled && clientGroup) {
-          setAdminDistrictNames([clientGroup]);
+          setAdminDistricts([
+            {
+              district_id: selectedDistrictId || "unknown",
+              district_name: clientGroup,
+            },
+          ]);
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [group, clientGroup]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [group, clientGroup, isSiteAdmin]);
 
   const activeDistrictName = clientGroup || defaultGroup;
 
@@ -1025,6 +1055,7 @@ const Landing = ({ idleCountParam }) => {
             }}
           >
             <Dashboard
+              key={vizRemountKey}
               dashboardLinkProp={vizSrcLink}
               displayTabs={displayTabs}
               idleCount={idleCount}
@@ -1039,21 +1070,71 @@ const Landing = ({ idleCountParam }) => {
     );
   };
 
-  const setSelectedClient = (event) => {
-    setDefaultGroup(event);
+  const resetCapitalPlanForDistrict = (districtName) => {
+    setDefaultGroup(districtName);
     setVizReady(false);
+    vizRef.current = null;
     setEmbedContent("dashboard");
     setActiveNavRole("overview");
     pendingDepartmentRef.current = null;
-    filterOpSeqRef.current++;
+    filterOpSeqRef.current += 1;
     setFilterSelections({});
+    filterRowsRef.current = null;
+    filterRowsPromiseRef.current = null;
+    setDashboardFilters([]);
     const overview = sheetMapRef.current.overview;
     if (overview?.link) {
       activeURLRef.current = overview.link;
       setActiveURL(overview.link);
       setVizSrcLink(overview.link);
       setActiveDashboardId(overview.id);
-      syncFiltersFromRows({});
+    }
+    setVizRemountKey((key) => key + 1);
+  };
+
+  const handleImpersonateDistrict = async (districtId) => {
+    if (!districtId || districtId === selectedDistrictId || districtSwitching) {
+      return;
+    }
+    const district = adminDistricts.find((d) => d.district_id === districtId);
+    if (!district) {
+      return;
+    }
+
+    setDistrictSwitching(true);
+    try {
+      const result = await impersonateDistrict({ districtId });
+      const nextId = result.district_id || district.district_id;
+      const nextName = result.district_name || district.district_name;
+      const branding = result.branding || {};
+      const nextLogo = branding.logo_url || "";
+      const nextColor = branding.custom_color || DEFAULT_BRAND_COLOR;
+
+      localStorage.setItem("district_id", JSON.stringify(nextId));
+      localStorage.setItem("district_name", JSON.stringify(nextName));
+      localStorage.setItem("client_list", JSON.stringify(nextName));
+      localStorage.setItem("logo_url", JSON.stringify(nextLogo));
+      localStorage.setItem("custom_color", JSON.stringify(nextColor));
+
+      setSelectedDistrictId(nextId);
+      setBrandLogoUrl(nextLogo);
+      setBrandColor(nextColor);
+
+      const loginName = localStorage.getItem("login-name") || "";
+      if (loginName && validUserContext.apiAuthCheck) {
+        await validUserContext.apiAuthCheck(loginName, "", true);
+      }
+
+      resetCapitalPlanForDistrict(nextName);
+      const rows = await ensureFilterRows();
+      if (rows?.length) {
+        setDashboardFilters(buildFiltersFromRows(rows, {}));
+      }
+    } catch (error) {
+      console.error("Failed to switch client district:", error);
+      window.alert(error.message || "Could not switch client district.");
+    } finally {
+      setDistrictSwitching(false);
     }
   };
 
@@ -1332,17 +1413,21 @@ const Landing = ({ idleCountParam }) => {
           className={`${menuOpen ? classes.sidebar : classes.sidebarClosed}`}
         >
           <div className={classes.sidebartop}>
-            {group === "Admin" && (
+            {(isSiteAdmin || group === "Admin") && adminDistricts.length > 0 && (
               <div className={classes.sideState}>
                 <div className={classes.selectDropdownWrapper}>
                   <select
-                    value={defaultGroup}
-                    onChange={(e) => setSelectedClient(e.target.value)}
+                    value={selectedDistrictId}
+                    onChange={(e) => handleImpersonateDistrict(e.target.value)}
                     className={classes.selectDropdown}
+                    disabled={districtSwitching}
                   >
-                    {adminDistrictNames.map((client) => (
-                      <option key={client} value={client}>
-                        {client}
+                    {adminDistricts.map((district) => (
+                      <option
+                        key={district.district_id}
+                        value={district.district_id}
+                      >
+                        {district.district_name}
                       </option>
                     ))}
                   </select>
@@ -1400,6 +1485,10 @@ const Landing = ({ idleCountParam }) => {
           fallbackLogoUrl={defaultLink}
           heroImageUrl={heroFallback}
           showAdmin={isSiteAdmin}
+          districts={adminDistricts}
+          selectedDistrictId={selectedDistrictId}
+          onDistrictChange={handleImpersonateDistrict}
+          districtSwitching={districtSwitching}
           onOpenAdmin={() => setPortalView("admin")}
           onOpenCapitalPlan={() => {
             setActiveNavRole("overview");

@@ -126,6 +126,11 @@ export const fetchAdminUsers = async () => adminRequest("/admin/users", "GET");
 export const fetchAdminDistricts = async () =>
   adminRequest("/admin/districts", "GET");
 
+export const impersonateDistrict = async ({ districtId } = {}) =>
+  adminRequest("/admin/impersonate-district", "POST", {
+    district_id: districtId,
+  });
+
 export const createAdminUser = async (data) =>
   adminRequest("/admin/users", "POST", data);
 
