@@ -1,0 +1,236 @@
+@import "../variables";
+
+.panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background-color: $surface-white;
+  border: 1px solid $brand-cool-gray;
+  border-radius: 14px;
+  box-shadow: 0 4px 16px rgba(6, 8, 8, 0.06);
+  padding: 20px 24px;
+  overflow: hidden;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex: 0 0 auto;
+}
+
+.title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: $brand-black;
+}
+
+.subtitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: $text-muted;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.primaryBtn {
+  border: none;
+  background-color: $brand-teal;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 9px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  &:hover:not(:disabled) {
+    background-color: $brand-teal-hover;
+  }
+}
+
+.secondaryBtn {
+  border: 1px solid $brand-cool-gray;
+  background-color: $surface-white;
+  color: $brand-black;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+
+  &:hover {
+    background-color: $brand-cloud;
+  }
+}
+
+.linkBtn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: $brand-teal;
+  cursor: pointer;
+
+  &:hover {
+    color: $brand-teal-hover;
+    text-decoration: underline;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+    text-decoration: none;
+  }
+}
+
+.error,
+.notice {
+  flex: 0 0 auto;
+  font-size: 13px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+}
+
+.error {
+  color: #8a2216;
+  background-color: #fdecea;
+  border-color: #f5c6c0;
+}
+
+.notice {
+  color: $brand-teal-deep;
+  background-color: $brand-teal-12;
+  border-color: rgba(0, 110, 99, 0.2);
+}
+
+.form {
+  flex: 0 0 auto;
+  border: 1px solid $brand-cool-gray;
+  border-radius: 12px;
+  padding: 16px;
+  background-color: $brand-cloud;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: $brand-black;
+
+  input,
+  select {
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 400;
+    color: $brand-black;
+    padding: 9px 12px;
+    border: 1px solid $brand-cool-gray;
+    border-radius: 8px;
+    background-color: $surface-white;
+
+    &:focus {
+      outline: 2px solid $brand-teal-18;
+      outline-offset: 1px;
+    }
+  }
+}
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.tableWrapper {
+  flex: 1 1 auto;
+  overflow: auto;
+  border: 1px solid $brand-cool-gray;
+  border-radius: 12px;
+}
+
+.placeholder {
+  padding: 32px;
+  text-align: center;
+  color: $text-muted;
+  font-size: 14px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+
+  th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    text-align: left;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: $text-muted;
+    background-color: $brand-cloud;
+    padding: 12px 16px;
+    border-bottom: 1px solid $brand-cool-gray;
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 12px 16px;
+    border-bottom: 1px solid $brand-cool-gray;
+    color: $brand-black;
+    vertical-align: middle;
+  }
+
+  tbody tr:hover td {
+    background-color: rgba(0, 110, 99, 0.04);
+  }
+}
+
+.rowActions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  justify-content: flex-end;
+  white-space: nowrap;
+}
+
+.muted {
+  color: $text-muted;
+}
+
+@media all and (max-width: 900px) {
+  .panel {
+    padding: 16px;
+  }
+
+  .panelHeader {
+    flex-direction: column;
+  }
+}

@@ -41,6 +41,8 @@ const PortalHome = ({
   fallbackLogoUrl,
   heroImageUrl,
   onOpenCapitalPlan,
+  onOpenAdmin,
+  showAdmin,
   onLogout,
 }) => {
   const handleLogoError = (event) => {
@@ -64,9 +66,16 @@ const PortalHome = ({
             <div className={classes.brandTagline}>Empower · Challenge · Support</div>
           </div>
         </div>
-        <button type="button" className={classes.logoutBtn} onClick={onLogout}>
-          Log out
-        </button>
+        <div className={classes.topBarActions}>
+          {showAdmin && (
+            <button type="button" className={classes.adminBtn} onClick={onOpenAdmin}>
+              Admin
+            </button>
+          )}
+          <button type="button" className={classes.logoutBtn} onClick={onLogout}>
+            Log out
+          </button>
+        </div>
       </header>
 
       <section

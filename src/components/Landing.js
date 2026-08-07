@@ -6,156 +6,302 @@ import { useSwipeable } from "react-swipeable";
 import Dashboard from "./Dashboard";
 import oarLogo from "../assets/oar-logo-transparent-replit.png";
 import PortalHome from "./PortalHome";
+import AdminPanel from "./AdminPanel";
+import ProjectTimeline from "./ProjectTimeline";
 import heroFallback from "../assets/portal-hero.webp";
+import {
+  fetchAdminDistricts,
+  fetchDistrictBranding,
+  fetchDashboardFilters,
+} from "./ApiService";
+
+const SITE_ADMIN_ROLE = "SiteAdministratorCreator";
+const DEFAULT_BRAND_COLOR = "#e6b422";
+const DEFAULT_LOGO_URL =
+  "https://storage.googleapis.com/bp_portal_artifacts/bradleypayne.png";
 
 const isMobileDevice = () => /Mobi|Android/i.test(navigator.userAgent);
 
-// Selection-key order for cache paths. Category is sidebar-driven; the rest are
-// always-visible top dropdowns (no progressive reveal).
-const FILTER_ORDER = ["Category", "Location Type", "Location", "Type"];
-const TOP_FILTER_ORDER = ["Location Type", "Location", "Type"];
+const FILTER_ORDER = ["Category", "Location Type", "Location"];
+const TOP_FILTER_ORDER = ["Location Type", "Location"];
+/** Still cleared on the Tableau viz when resetting filters (workbook field). */
+const TABLEAU_EXTRA_CLEAR_FILTERS = ["Type"];
 const CATEGORY_FILTER = "Category";
+/** Tableau may expose the department dimension as Category or Department. */
+const DEPARTMENT_FILTER_ALIASES = ["Category", "Department"];
+const WORKBOOK_NAME = "Xeo Testing II";
+
+/**
+ * Build Tableau-shaped filter metadata from BigQuery capital-plan rows.
+ * Categories are ordered by total expense descending; Location Type / Location
+ * cascade from the current selections.
+ */
+const buildFiltersFromRows = (rows, selections = {}) => {
+  const list = Array.isArray(rows) ? rows : [];
+  const selectedDepartment = (() => {
+    for (const name of DEPARTMENT_FILTER_ALIASES) {
+      if (selections[name] !== undefined) {
+        return selections[name];
+      }
+    }
+    return undefined;
+  })();
+  const selectedLocationType = selections["Location Type"];
+  const selectedLocation = selections.Location;
+
+  const categoryExpense = {};
+  for (const row of list) {
+    const category = (row.category || "").trim();
+    if (!category) {
+      continue;
+    }
+    categoryExpense[category] =
+      (categoryExpense[category] || 0) + (Number(row.expense_amount) || 0);
+  }
+  const categories = Object.keys(categoryExpense).sort(
+    (a, b) => categoryExpense[b] - categoryExpense[a] || a.localeCompare(b)
+  );
+
+  let scoped = list;
+  if (selectedDepartment) {
+    scoped = scoped.filter(
+      (row) => (row.category || "").trim() === selectedDepartment
+    );
+  }
+
+  const locationTypeExpense = {};
+  for (const row of scoped) {
+    const locationType = (row.location_type || "").trim();
+    if (!locationType) {
+      continue;
+    }
+    locationTypeExpense[locationType] =
+      (locationTypeExpense[locationType] || 0) +
+      (Number(row.expense_amount) || 0);
+  }
+  const locationTypes = Object.keys(locationTypeExpense).sort(
+    (a, b) =>
+      locationTypeExpense[b] - locationTypeExpense[a] || a.localeCompare(b)
+  );
+
+  if (selectedLocationType) {
+    scoped = scoped.filter(
+      (row) => (row.location_type || "").trim() === selectedLocationType
+    );
+  }
+
+  const locationExpense = {};
+  for (const row of scoped) {
+    const location = (row.location || "").trim();
+    if (!location) {
+      continue;
+    }
+    locationExpense[location] =
+      (locationExpense[location] || 0) + (Number(row.expense_amount) || 0);
+  }
+  const locations = Object.keys(locationExpense).sort(
+    (a, b) => locationExpense[b] - locationExpense[a] || a.localeCompare(b)
+  );
+
+  const appliedFor = (fieldName, selected) =>
+    selected ? [selected] : [];
+
+  return [
+    {
+      fieldName: CATEGORY_FILTER,
+      worksheetNames: [],
+      values: categories,
+      appliedValues: appliedFor(CATEGORY_FILTER, selectedDepartment),
+      isAllSelected: !selectedDepartment,
+      filterType: "categorical",
+    },
+    {
+      fieldName: "Location Type",
+      worksheetNames: [],
+      values: locationTypes,
+      appliedValues: appliedFor("Location Type", selectedLocationType),
+      isAllSelected: !selectedLocationType,
+      filterType: "categorical",
+    },
+    {
+      fieldName: "Location",
+      worksheetNames: [],
+      values: locations,
+      appliedValues: appliedFor("Location", selectedLocation),
+      isAllSelected: !selectedLocation,
+      filterType: "categorical",
+    },
+  ];
+};
 
 const orderTopFilters = (filters) =>
   TOP_FILTER_ORDER.map((name) => (filters || []).find((f) => f.fieldName === name)).filter(
     Boolean
   );
 
-const FILTER_CACHE_KEY = "dashboard_filter_cache";
+const normalizeFieldName = (fieldName) =>
+  String(fieldName || "")
+    .replace(/[\[\]]/g, "")
+    .trim()
+    .toLowerCase();
 
-const makeSelectionKey = (selections) =>
-  FILTER_ORDER.filter((name) => selections && selections[name] !== undefined)
-    .map((name) => `${name}=${selections[name]}`)
-    .join("|");
-
-const readFilterCache = () => {
-  try {
-    return JSON.parse(localStorage.getItem(FILTER_CACHE_KEY)) || {};
-  } catch (error) {
-    return {};
+/** True when a Tableau field should drive the Departments side nav. */
+const isDepartmentFieldName = (fieldName) => {
+  const n = normalizeFieldName(fieldName);
+  if (!n) {
+    return false;
   }
+  // Never treat top-bar filters as departments.
+  if (TOP_FILTER_ORDER.some((name) => normalizeFieldName(name) === n)) {
+    return false;
+  }
+  if (DEPARTMENT_FILTER_ALIASES.some((name) => normalizeFieldName(name) === n)) {
+    return true;
+  }
+  return (
+    n === "departments" ||
+    n === "dept" ||
+    n === "category name" ||
+    n.endsWith(" category") ||
+    n.startsWith("category ") ||
+    n.includes("department")
+  );
 };
 
-const getCachedFilters = (dashboardKey, selectionKey = "") => {
-  if (!dashboardKey) {
-    return [];
-  }
-  const cache = readFilterCache();
-  const entry = cache[dashboardKey];
-  if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-    return [];
-  }
-  return Array.isArray(entry[selectionKey]) ? entry[selectionKey] : [];
-};
-
-const setCachedFilters = (dashboardKey, selectionKey, filters) => {
-  if (!dashboardKey) {
-    return;
-  }
-  try {
-    const cache = readFilterCache();
-    if (
-      !cache[dashboardKey] ||
-      typeof cache[dashboardKey] !== "object" ||
-      Array.isArray(cache[dashboardKey])
-    ) {
-      cache[dashboardKey] = {};
-    }
-    cache[dashboardKey][selectionKey] = filters;
-    localStorage.setItem(FILTER_CACHE_KEY, JSON.stringify(cache));
-  } catch (error) {
-    // Ignore serialization / quota errors – caching is best-effort.
-  }
-};
-
-const findCategoryValuesInFilters = (filters) => {
-  const category = (filters || []).find((f) => f.fieldName === CATEGORY_FILTER);
-  return category && Array.isArray(category.values) ? category.values : [];
-};
-
-/** Prefer live/state filters, then any cached Category domain for this dashboard. */
-const getDepartmentValues = (dashboardKey, dashboardFilters) => {
-  const fromState = findCategoryValuesInFilters(dashboardFilters);
-  if (fromState.length > 0) {
-    return fromState;
-  }
-  if (!dashboardKey) {
-    return [];
-  }
-  const cache = readFilterCache();
-  const entry = cache[dashboardKey];
-  if (!entry || typeof entry !== "object") {
-    return [];
-  }
-  for (const key of Object.keys(entry)) {
-    const values = findCategoryValuesInFilters(entry[key]);
-    if (values.length > 0) {
-      return values;
+const findDepartmentFilterInList = (filters) => {
+  const list = filters || [];
+  // Prefer exact Category / Department matches, then fuzzy department-like names.
+  for (const name of DEPARTMENT_FILTER_ALIASES) {
+    const match = list.find(
+      (f) => normalizeFieldName(f.fieldName) === normalizeFieldName(name)
+    );
+    if (match) {
+      return match;
     }
   }
-  return [];
+  const fuzzy = list.find((f) => isDepartmentFieldName(f.fieldName));
+  return fuzzy || null;
 };
 
-const isFundingNavLabel = (label) =>
-  /forecast|finance|funding/i.test(label || "");
+const findDepartmentValuesInFilters = (filters) => {
+  const department = findDepartmentFilterInList(filters);
+  if (!department || !Array.isArray(department.values)) {
+    return [];
+  }
+  return department.values.filter(
+    (value) => value && value !== "(All)" && value !== "All Departments"
+  );
+};
+
+/** Department list from in-memory BigQuery-backed filter state. */
+const getDepartmentValues = (_dashboardKey, dashboardFilters) =>
+  findDepartmentValuesInFilters(dashboardFilters);
+
+const sheetNameFromLink = (link) => (link || "").split("/").pop() || "";
+
+const matchSheetRole = (link) => {
+  const path = (link || "").toLowerCase();
+  if (path.includes("capitalplanoverview")) {
+    return "overview";
+  }
+  if (path.includes("capitalplandetail")) {
+    return "detail";
+  }
+  if (path.endsWith("/forecast") || path.includes("/forecast")) {
+    return "forecast";
+  }
+  if (path.includes("financ")) {
+    return "financing";
+  }
+  return null;
+};
+
+/** Resolve fixed sheet roles from the Xeo Testing II workbook only. */
+const resolveXeoSheetMap = (navigationEntries) => {
+  const empty = {
+    overview: null,
+    detail: null,
+    forecast: null,
+    financing: null,
+  };
+  const workbook = (navigationEntries || []).find(
+    ([, entry]) => entry && entry.name === WORKBOOK_NAME
+  );
+  if (!workbook) {
+    return empty;
+  }
+  const [, entry] = workbook;
+  const map = { ...empty };
+  (entry.dashboards || []).forEach((link, i) => {
+    const role = matchSheetRole(link);
+    if (!role || map[role]) {
+      return;
+    }
+    map[role] = {
+      link,
+      id: (entry.dashboard_ids || [])[i],
+      label: (link || "").split("/").pop(),
+      role,
+    };
+  });
+  return map;
+};
 
 const Landing = ({ idleCountParam }) => {
-  const currentNav = Object.entries(JSON.parse(localStorage.getItem("navigation")));
-
+  const currentNav = Object.entries(JSON.parse(localStorage.getItem("navigation")) || {});
   const filteredNav = currentNav.filter(([, b]) => !b.name.includes("Curves Export"));
-
   const sortedNav = filteredNav.sort((a, b) => (a[1].name > b[1].name ? 1 : -1));
+
   const clientGroupRaw = JSON.parse(localStorage.getItem("client_list"));
   const clientGroup =
     typeof clientGroupRaw === "string" && clientGroupRaw ? clientGroupRaw : null;
-  const clientList = Array.isArray(clientGroupRaw) ? clientGroupRaw : [];
   const group = JSON.parse(localStorage.getItem("group")) ?? "default";
+  const role = JSON.parse(localStorage.getItem("role")) ?? "";
+  const isSiteAdmin = role === SITE_ADMIN_ROLE;
 
-  const clientFilteredNav = sortedNav;
-
-  const flattenNav = (nav) =>
-    nav.flatMap(([, entry]) =>
-      entry.dashboards.map((dashboard, i) => ({
-        label:
-          entry.dashboards.length > 1
-            ? `${entry.name} - ${dashboard.split("/").pop()}`
-            : entry.name,
-        link: dashboard,
-        id: entry.dashboard_ids[i],
-      }))
-    );
-
-  const flatNav = flattenNav(clientFilteredNav);
-  const buttons = flatNav.map((n) => n.label);
-  const links = flatNav.map((n) => n.link);
-  const dashboardids = flatNav.map((n) => n.id);
+  const sheetMap = resolveXeoSheetMap(sortedNav);
+  const detailLink = sheetMap.detail?.link || "";
+  const overviewLink = sheetMap.overview?.link || detailLink;
+  const overviewId = sheetMap.overview?.id || sheetMap.detail?.id;
 
   const [portalView, setPortalView] = useState("home");
+  const [embedContent, setEmbedContent] = useState("dashboard"); // dashboard | timeline
+  const [activeNavRole, setActiveNavRole] = useState("overview"); // overview | detail | forecast | financing | timeline
   const [menuOpen, setMenuOpen] = useState(!isMobileDevice());
+  const [adminDistrictNames, setAdminDistrictNames] = useState([]);
+  const [brandLogoUrl, setBrandLogoUrl] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("logo_url")) || "";
+    } catch {
+      return "";
+    }
+  });
+  const [brandColor, setBrandColor] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("custom_color")) || DEFAULT_BRAND_COLOR;
+    } catch {
+      return DEFAULT_BRAND_COLOR;
+    }
+  });
 
-  const [activeButton, setActiveButton] = useState(0);
   const [activeDashboard, setActiveDashboard] = useState(true);
-  const [activeURL, setActiveURL] = useState(links[0]);
-  const [activeDashboardId, setActiveDashboardId] = useState(dashboardids[0]);
+  const [activeURL, setActiveURL] = useState(overviewLink);
+  // Stable Tableau embed src. Sheet switches within Xeo Testing II prefer
+  // activateSheetAsync so filters can be applied without reloading the JWT viz.
+  const [vizSrcLink, setVizSrcLink] = useState(overviewLink);
+  const [activeDashboardId, setActiveDashboardId] = useState(overviewId);
   const [displayTabs, setDisplayTabs] = useState(false);
 
   const [defaultGroup, setDefaultGroup] = useState(() => {
     if (group === "Admin") {
-      return clientList.length > 0 ? clientList[0] : "default";
+      return clientGroup || "default";
     }
-    return group;
+    return clientGroup || group;
   });
 
-  const [currentButtons, setCurrentButtons] = useState(buttons);
-  const [currentLinks, setCurrentLinks] = useState(links);
-  const [currentIds, setCurrentIds] = useState(dashboardids);
-
-  const [dashboardFilters, setDashboardFilters] = useState(() =>
-    getCachedFilters(links[0])
-  );
+  const [dashboardFilters, setDashboardFilters] = useState([]);
   const [filterSelections, setFilterSelections] = useState({});
   const [vizReady, setVizReady] = useState(false);
-  const [filterLoading, setFilterLoading] = useState(false);
 
   const [detailsOverlayOpen, setDetailsOverlayOpen] = useState(false);
   const [detailsImageUrl, setDetailsImageUrl] = useState(null);
@@ -166,20 +312,84 @@ const Landing = ({ idleCountParam }) => {
   const dashboardRef = useRef(null);
   const sidebarRef = useRef(null);
   const vizRef = useRef(null);
-  const activeURLRef = useRef(links[0]);
+  const activeURLRef = useRef(overviewLink);
+  const activeNavRoleRef = useRef("overview");
   const filterOpSeqRef = useRef(0);
   const vizOpChainRef = useRef(Promise.resolve());
   const dashboardFiltersRef = useRef(dashboardFilters);
+  const pendingDepartmentRef = useRef(null); // null | "__ALL__" | department name
+  const sheetMapRef = useRef(sheetMap);
+  const filterRowsRef = useRef(null);
+  const filterRowsPromiseRef = useRef(null);
 
   useEffect(() => {
     activeURLRef.current = activeURL;
   }, [activeURL]);
 
   useEffect(() => {
+    activeNavRoleRef.current = activeNavRole;
+  }, [activeNavRole]);
+
+  useEffect(() => {
     dashboardFiltersRef.current = dashboardFilters;
   }, [dashboardFilters]);
 
+  useEffect(() => {
+    sheetMapRef.current = sheetMap;
+  }, [sheetMap]);
+
   const validUserContext = useContext(ValidUserContext);
+
+  const ensureFilterRows = async () => {
+    if (Array.isArray(filterRowsRef.current)) {
+      return filterRowsRef.current;
+    }
+    if (filterRowsPromiseRef.current) {
+      return filterRowsPromiseRef.current;
+    }
+    filterRowsPromiseRef.current = fetchDashboardFilters()
+      .then((data) => {
+        const rows = Array.isArray(data?.rows) ? data.rows : [];
+        filterRowsRef.current = rows;
+        return rows;
+      })
+      .catch((error) => {
+        console.error("Error loading dashboard filters from database:", error);
+        filterRowsRef.current = filterRowsRef.current || [];
+        return filterRowsRef.current;
+      })
+      .finally(() => {
+        filterRowsPromiseRef.current = null;
+      });
+    return filterRowsPromiseRef.current;
+  };
+
+  // Prefetch filter domains from BigQuery so Departments are ready before Tableau.
+  // Also drop the legacy Tableau extract cache if it is still present.
+  useEffect(() => {
+    try {
+      localStorage.removeItem("dashboard_filter_cache");
+    } catch (error) {
+      // ignore
+    }
+    let cancelled = false;
+    ensureFilterRows().then((rows) => {
+      if (cancelled || !rows?.length) {
+        return;
+      }
+      if (
+        !dashboardFiltersRef.current?.length ||
+        findDepartmentValuesInFilters(dashboardFiltersRef.current).length === 0
+      ) {
+        setDashboardFilters(buildFiltersFromRows(rows, {}));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+    // intentionally once on mount for the signed-in session
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (idleCountParam !== idleCount) {
@@ -188,8 +398,62 @@ const Landing = ({ idleCountParam }) => {
     }
   }, [idleCountParam]);
 
+  useEffect(() => {
+    if (group !== "Admin") {
+      return undefined;
+    }
+    let cancelled = false;
+    fetchAdminDistricts()
+      .then((data) => {
+        if (cancelled) return;
+        const names = (data.districts || [])
+          .map((d) => d.district_name)
+          .filter(Boolean);
+        setAdminDistrictNames(names);
+        setDefaultGroup((current) => {
+          if (names.includes(current)) return current;
+          return names[0] || clientGroup || current || "default";
+        });
+      })
+      .catch(() => {
+        if (!cancelled && clientGroup) {
+          setAdminDistrictNames([clientGroup]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [group, clientGroup]);
+
+  const activeDistrictName = clientGroup || defaultGroup;
+
+  useEffect(() => {
+    const districtName = (activeDistrictName || "").trim();
+    if (!districtName || districtName === "default" || districtName === "Admin") {
+      return undefined;
+    }
+    let cancelled = false;
+    fetchDistrictBranding({ districtName })
+      .then((data) => {
+        if (cancelled) return;
+        const branding = data.branding || {};
+        setBrandLogoUrl(branding.logo_url || "");
+        setBrandColor(branding.custom_color || DEFAULT_BRAND_COLOR);
+        localStorage.setItem("logo_url", JSON.stringify(branding.logo_url || ""));
+        localStorage.setItem(
+          "custom_color",
+          JSON.stringify(branding.custom_color || DEFAULT_BRAND_COLOR)
+        );
+      })
+      .catch(() => {
+        // Keep login-cached branding when the lookup fails.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeDistrictName]);
+
   const handleOutsideClick = (event) => {
-    // Only auto-close the drawer on mobile; desktop keeps the sidebar open.
     if (!isMobileDevice()) {
       return;
     }
@@ -221,7 +485,8 @@ const Landing = ({ idleCountParam }) => {
 
   const handleExportPNGClick = () => {
     try {
-      const viz = vizRef.current || dashboardRef.current?.firstChild?.firstChild?.childNodes?.[1];
+      const viz =
+        vizRef.current || dashboardRef.current?.firstChild?.firstChild?.childNodes?.[1];
       if (viz && viz.exportImageAsync) {
         viz.exportImageAsync();
       }
@@ -232,7 +497,8 @@ const Landing = ({ idleCountParam }) => {
 
   const handleBackgroundRefresh = () => {
     try {
-      const viz = vizRef.current || dashboardRef.current?.firstChild?.firstChild?.childNodes?.[1];
+      const viz =
+        vizRef.current || dashboardRef.current?.firstChild?.firstChild?.childNodes?.[1];
       if (viz && viz.refreshDataAsync) {
         viz.refreshDataAsync().catch((error) => {
           console.error("Error refreshing dashboard:", error);
@@ -243,65 +509,49 @@ const Landing = ({ idleCountParam }) => {
     }
   };
 
-  const FILTER_SOURCE_WORKSHEETS = ["All Years (10yr)"];
+  const getDepartmentFieldName = (filters = dashboardFiltersRef.current) => {
+    const match = findDepartmentFilterInList(filters);
+    return match?.fieldName || CATEGORY_FILTER;
+  };
 
-  const extractFiltersFromViz = async (viz) => {
-    const activeSheet = viz.workbook.activeSheet;
-    const allWorksheets =
-      activeSheet.sheetType === "dashboard" ? activeSheet.worksheets : [activeSheet];
-
-    const worksheets = allWorksheets.filter((ws) =>
-      FILTER_SOURCE_WORKSHEETS.includes(ws.name)
-    );
-    const effectiveWorksheets = worksheets.length > 0 ? worksheets : allWorksheets;
-
-    const filterMap = {};
-
-    for (const worksheet of effectiveWorksheets) {
-      const worksheetFilters = await worksheet.getFiltersAsync();
-      for (const filter of worksheetFilters) {
-        if (filter.filterType !== "categorical") {
-          continue;
-        }
-        const key = filter.fieldName;
-        const appliedValues = (filter.appliedValues || []).map(
-          (v) => v.formattedValue ?? v.value
-        );
-
-        const fetchFilterValues = async () => {
-          try {
-            const domain = await filter.getDomainAsync("relevant");
-            return (domain.values || []).map((v) => v.formattedValue ?? v.value);
-          } catch (domainError) {
-            return appliedValues;
-          }
-        };
-
-        if (!filterMap[key]) {
-          filterMap[key] = {
-            fieldName: filter.fieldName,
-            worksheetNames: [worksheet.name],
-            values: await fetchFilterValues(),
-            appliedValues,
-            isAllSelected: !!filter.isAllSelected,
-          };
-        } else {
-          if (!filterMap[key].worksheetNames.includes(worksheet.name)) {
-            filterMap[key].worksheetNames.push(worksheet.name);
-          }
-          if (filterMap[key].values.length === 0) {
-            const retriedValues = await fetchFilterValues();
-            if (retriedValues.length > 0) {
-              filterMap[key].values = retriedValues;
-              if (appliedValues.length > 0) {
-                filterMap[key].appliedValues = appliedValues;
-              }
-            }
-          }
-        }
+  const getSelectedDepartment = (selections = filterSelections) => {
+    for (const name of DEPARTMENT_FILTER_ALIASES) {
+      if (selections[name] !== undefined) {
+        return selections[name];
       }
     }
-    return Object.values(filterMap);
+    return undefined;
+  };
+
+  const activateWorkbookSheet = async (viz, link) => {
+    if (!viz?.workbook || !link) {
+      return false;
+    }
+    const target = sheetNameFromLink(link);
+    if (!target) {
+      return false;
+    }
+    const published = viz.workbook.publishedSheetsInfo || [];
+    const match =
+      published.find((sheet) => sheet.name === target) ||
+      published.find(
+        (sheet) =>
+          (sheet.name || "").replace(/\s+/g, "").toLowerCase() ===
+          target.replace(/\s+/g, "").toLowerCase()
+      ) ||
+      published.find((sheet) =>
+        (sheet.url || "").toLowerCase().includes(target.toLowerCase())
+      );
+    if (!match) {
+      return false;
+    }
+    try {
+      await viz.workbook.activateSheetAsync(match.name);
+      return true;
+    } catch (error) {
+      console.warn(`Unable to activate sheet "${match.name}":`, error);
+      return false;
+    }
   };
 
   const applyFilterValue = async (viz, filter, value) => {
@@ -318,6 +568,9 @@ const Landing = ({ idleCountParam }) => {
 
     let applied = false;
     for (const worksheet of worksheets) {
+      if ((worksheet.name || "").toUpperCase().includes("TOTAL CAPITAL")) {
+        continue;
+      }
       try {
         if (value === "__ALL__") {
           await worksheet.clearFilterAsync(filter.fieldName);
@@ -350,12 +603,14 @@ const Landing = ({ idleCountParam }) => {
     };
   };
 
-  const showCachedFor = (dashboardKey, selections) => {
-    const cached = getCachedFilters(dashboardKey, makeSelectionKey(selections));
-    if (cached.length > 0) {
-      setDashboardFilters(cached);
+  const syncFiltersFromRows = (selections) => {
+    const rows = filterRowsRef.current;
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return [];
     }
-    return cached;
+    const fresh = buildFiltersFromRows(rows, selections || {});
+    setDashboardFilters(fresh);
+    return fresh;
   };
 
   const enqueueVizOp = (op) => {
@@ -366,29 +621,142 @@ const Landing = ({ idleCountParam }) => {
     return next;
   };
 
-  const backgroundRefresh = async (viz, dashboardKey, selections, seq) => {
-    const fresh = await extractFiltersFromViz(viz);
-    if (fresh.length === 0) {
-      return;
+  const backgroundRefresh = async (_viz, dashboardKey, selections, seq) => {
+    const rows = await ensureFilterRows();
+    if (!rows?.length) {
+      console.warn("No capital-plan filter rows returned from database.");
+      return [];
     }
-    setCachedFilters(dashboardKey, makeSelectionKey(selections), fresh);
-    if (seq === filterOpSeqRef.current && activeURLRef.current === dashboardKey) {
+
+    const fresh = buildFiltersFromRows(rows, selections || {});
+    const onDetailDashboard =
+      !dashboardKey || activeURLRef.current === dashboardKey;
+    if (seq === filterOpSeqRef.current && onDetailDashboard) {
       setDashboardFilters(fresh);
+    } else if (
+      findDepartmentValuesInFilters(dashboardFiltersRef.current).length === 0
+    ) {
+      // Keep Departments side nav populated even when not on Detail.
+      setDashboardFilters(buildFiltersFromRows(rows, {}));
     }
+    return fresh;
+  };
+
+  const clearTableauExtraFilters = async (viz) => {
+    for (const name of TABLEAU_EXTRA_CLEAR_FILTERS) {
+      await applyFilterValue(viz, { fieldName: name }, "__ALL__");
+    }
+  };
+
+  const applyDepartmentOnViz = async (viz, departmentValue, dashboardKey) => {
+    const seq = ++filterOpSeqRef.current;
+    const departmentField = getDepartmentFieldName();
+    const newSelections = departmentValue
+      ? { [departmentField]: departmentValue }
+      : {};
+    setFilterSelections(newSelections);
+    syncFiltersFromRows(newSelections);
+
+    await enqueueVizOp(async () => {
+      const categoryFilter = resolveFilterMeta(departmentField);
+      if (departmentValue) {
+        await applyFilterValue(viz, categoryFilter, departmentValue);
+      } else {
+        await applyFilterValue(viz, categoryFilter, "__ALL__");
+        for (const alias of DEPARTMENT_FILTER_ALIASES) {
+          if (alias !== departmentField) {
+            await applyFilterValue(viz, { fieldName: alias }, "__ALL__");
+          }
+        }
+      }
+      for (const name of TOP_FILTER_ORDER) {
+        const downstreamFilter = resolveFilterMeta(name);
+        await applyFilterValue(viz, downstreamFilter, "__ALL__");
+      }
+      await clearTableauExtraFilters(viz);
+      await backgroundRefresh(viz, dashboardKey, newSelections, seq);
+    });
+  };
+
+  const isDetailRole = (role) => role === "detail";
+
+  const runDetailReady = (viz, { pending } = {}) => {
+    vizRef.current = viz;
+    const dashboardKey =
+      sheetMapRef.current.detail?.link || activeURLRef.current;
+    setVizReady(true);
+
+    const seq = ++filterOpSeqRef.current;
+    const pendingValue =
+      pending !== undefined ? pending : pendingDepartmentRef.current;
+    pendingDepartmentRef.current = null;
+
+    const departmentField = getDepartmentFieldName();
+    const initialSelections =
+      pendingValue && pendingValue !== "__ALL__"
+        ? { [departmentField]: pendingValue }
+        : {};
+    setFilterSelections(initialSelections);
+    syncFiltersFromRows(initialSelections);
+
+    enqueueVizOp(async () => {
+      // Load filter domains from BigQuery, then apply to Tableau.
+      const fresh = await backgroundRefresh(
+        viz,
+        dashboardKey,
+        initialSelections,
+        seq
+      );
+      const liveDepartmentField = getDepartmentFieldName(
+        fresh?.length ? fresh : dashboardFiltersRef.current
+      );
+
+      if (pendingValue && pendingValue !== "__ALL__") {
+        await applyFilterValue(
+          viz,
+          resolveFilterMeta(liveDepartmentField),
+          pendingValue
+        );
+        for (const name of TOP_FILTER_ORDER) {
+          await applyFilterValue(viz, resolveFilterMeta(name), "__ALL__");
+        }
+        await clearTableauExtraFilters(viz);
+        await backgroundRefresh(viz, dashboardKey, initialSelections, seq);
+      } else {
+        await applyFilterValue(
+          viz,
+          resolveFilterMeta(liveDepartmentField),
+          "__ALL__"
+        );
+        for (const alias of DEPARTMENT_FILTER_ALIASES) {
+          if (alias !== liveDepartmentField) {
+            await applyFilterValue(viz, { fieldName: alias }, "__ALL__");
+          }
+        }
+        for (const name of TOP_FILTER_ORDER) {
+          await applyFilterValue(viz, resolveFilterMeta(name), "__ALL__");
+        }
+        await clearTableauExtraFilters(viz);
+      }
+    });
   };
 
   const handleDashboardReady = (viz) => {
     vizRef.current = viz;
-    const dashboardKey = activeURLRef.current;
-    const seq = ++filterOpSeqRef.current;
-    setFilterSelections({});
-    showCachedFor(dashboardKey, {});
+    const role = activeNavRoleRef.current;
     setVizReady(true);
-    enqueueVizOp(() => backgroundRefresh(viz, dashboardKey, {}, seq));
+
+    // Overview / Funding: no filter extraction.
+    if (!isDetailRole(role)) {
+      setFilterSelections({});
+      return;
+    }
+
+    runDetailReady(viz);
   };
 
   const handleTopFilterChange = (filter, value) => {
-    if (!vizReady || filterLoading) {
+    if (!vizReady || activeNavRole !== "detail") {
       return;
     }
     const viz = vizRef.current;
@@ -412,62 +780,153 @@ const Landing = ({ idleCountParam }) => {
 
     const seq = ++filterOpSeqRef.current;
     setFilterSelections(newSelections);
-    showCachedFor(dashboardKey, newSelections);
-    setFilterLoading(true);
+    syncFiltersFromRows(newSelections);
 
     enqueueVizOp(async () => {
-      try {
-        const liveFilter = resolveFilterMeta(filter.fieldName, filter);
-        if (!value) {
-          await applyFilterValue(viz, liveFilter, "__ALL__");
-        } else {
-          await applyFilterValue(viz, liveFilter, value);
-        }
-        for (const name of downstream) {
-          const downstreamFilter = resolveFilterMeta(name);
-          await applyFilterValue(viz, downstreamFilter, "__ALL__");
-        }
-      } finally {
-        // Hide overlay once the viz has been updated; option refresh can continue.
-        setFilterLoading(false);
+      const liveFilter = resolveFilterMeta(filter.fieldName, filter);
+      if (!value) {
+        await applyFilterValue(viz, liveFilter, "__ALL__");
+      } else {
+        await applyFilterValue(viz, liveFilter, value);
+      }
+      for (const name of downstream) {
+        const downstreamFilter = resolveFilterMeta(name);
+        await applyFilterValue(viz, downstreamFilter, "__ALL__");
+      }
+      if (filter.fieldName !== "Location") {
+        await clearTableauExtraFilters(viz);
       }
       await backgroundRefresh(viz, dashboardKey, newSelections, seq);
     });
   };
 
-  const handleDepartmentSelect = (value) => {
-    if (!vizReady || filterLoading) {
-      return;
-    }
-    const viz = vizRef.current;
-    if (!viz) {
+  const openSheet = (role, { clearFilters = true } = {}) => {
+    const sheet = sheetMapRef.current[role];
+    if (!sheet?.link) {
+      console.warn(`No sheet mapped for role: ${role}`);
       return;
     }
     validUserContext.localAuthCheck(false);
-    const dashboardKey = activeURLRef.current;
-    const newSelections = { [CATEGORY_FILTER]: value };
-    const seq = ++filterOpSeqRef.current;
-    setFilterSelections(newSelections);
-    showCachedFor(dashboardKey, newSelections);
-    setFilterLoading(true);
+    setEmbedContent("dashboard");
+    setActiveNavRole(role);
+    activeNavRoleRef.current = role;
+    setActiveDashboard(true);
+    setDisplayTabs(false);
+    pendingDepartmentRef.current = null;
 
-    enqueueVizOp(async () => {
-      try {
-        const categoryFilter = resolveFilterMeta(CATEGORY_FILTER);
-        await applyFilterValue(viz, categoryFilter, value);
-        for (const name of TOP_FILTER_ORDER) {
-          const downstreamFilter = resolveFilterMeta(name);
-          await applyFilterValue(viz, downstreamFilter, "__ALL__");
-        }
-      } finally {
-        setFilterLoading(false);
+    if (clearFilters && role !== "detail") {
+      setFilterSelections({});
+    }
+
+    if (activeURLRef.current === sheet.link && vizReady && vizRef.current) {
+      if (isMobileDevice()) {
+        setMenuOpen(false);
       }
-      await backgroundRefresh(viz, dashboardKey, newSelections, seq);
-    });
+      return false;
+    }
+
+    filterOpSeqRef.current++;
+    activeURLRef.current = sheet.link;
+    setActiveURL(sheet.link);
+    setActiveDashboardId(sheet.id);
+    if (role === "detail") {
+      syncFiltersFromRows(filterSelections);
+    }
+
+    const viz = vizRef.current;
+    if (vizReady && viz?.workbook) {
+      setVizReady(false);
+      enqueueVizOp(async () => {
+        const activated = await activateWorkbookSheet(viz, sheet.link);
+        if (activated) {
+          if (role === "detail") {
+            runDetailReady(viz, { pending: null });
+          } else {
+            setVizReady(true);
+          }
+        } else {
+          setVizSrcLink(sheet.link);
+          setVizReady(false);
+        }
+      });
+    } else {
+      setVizSrcLink(sheet.link);
+      setVizReady(false);
+    }
+
+    if (isMobileDevice()) {
+      setMenuOpen(false);
+    }
+    return true;
+  };
+
+  const handleDepartmentSelect = (value) => {
+    validUserContext.localAuthCheck(false);
+    if (!value) {
+      return;
+    }
+
+    const detail = sheetMapRef.current.detail;
+    if (!detail?.link) {
+      console.warn("CapitalPlanDetail sheet not found in Xeo Testing II navigation");
+      return;
+    }
+
+    const wasShowingDetail =
+      embedContent === "dashboard" &&
+      activeURLRef.current === detail.link &&
+      activeNavRole === "detail" &&
+      vizReady &&
+      !!vizRef.current;
+
+    setEmbedContent("dashboard");
+    setActiveNavRole("detail");
+    activeNavRoleRef.current = "detail";
+
+    // Already on Detail: apply the department filter.
+    if (wasShowingDetail) {
+      applyDepartmentOnViz(vizRef.current, value, detail.link);
+      if (isMobileDevice()) {
+        setMenuOpen(false);
+      }
+      return;
+    }
+
+    pendingDepartmentRef.current = value;
+    const departmentField = getDepartmentFieldName();
+    setFilterSelections({ [departmentField]: value });
+    filterOpSeqRef.current++;
+    activeURLRef.current = detail.link;
+    setActiveURL(detail.link);
+    setActiveDashboardId(detail.id);
+    setActiveDashboard(true);
+    syncFiltersFromRows({ [departmentField]: value });
+    setDisplayTabs(false);
+
+    const viz = vizRef.current;
+    if (embedContent === "dashboard" && vizReady && viz?.workbook) {
+      setVizReady(false);
+      enqueueVizOp(async () => {
+        const activated = await activateWorkbookSheet(viz, detail.link);
+        if (activated) {
+          runDetailReady(viz, { pending: value });
+        } else {
+          setVizSrcLink(detail.link);
+          setVizReady(false);
+        }
+      });
+    } else {
+      setVizSrcLink(detail.link);
+      setVizReady(false);
+    }
+
+    if (isMobileDevice()) {
+      setMenuOpen(false);
+    }
   };
 
   const handleClearTopFilters = () => {
-    if (!vizReady || filterLoading) {
+    if (!vizReady || activeNavRole !== "detail") {
       return;
     }
     const viz = vizRef.current;
@@ -477,23 +936,21 @@ const Landing = ({ idleCountParam }) => {
     validUserContext.localAuthCheck(false);
     const dashboardKey = activeURLRef.current;
     const newSelections = {};
-    if (filterSelections[CATEGORY_FILTER] !== undefined) {
-      newSelections[CATEGORY_FILTER] = filterSelections[CATEGORY_FILTER];
+    const selectedDept = getSelectedDepartment(filterSelections);
+    const departmentField = getDepartmentFieldName();
+    if (selectedDept !== undefined) {
+      newSelections[departmentField] = selectedDept;
     }
     const seq = ++filterOpSeqRef.current;
     setFilterSelections(newSelections);
-    showCachedFor(dashboardKey, newSelections);
-    setFilterLoading(true);
+    syncFiltersFromRows(newSelections);
 
     enqueueVizOp(async () => {
-      try {
-        for (const name of TOP_FILTER_ORDER) {
-          const downstreamFilter = resolveFilterMeta(name);
-          await applyFilterValue(viz, downstreamFilter, "__ALL__");
-        }
-      } finally {
-        setFilterLoading(false);
+      for (const name of TOP_FILTER_ORDER) {
+        const downstreamFilter = resolveFilterMeta(name);
+        await applyFilterValue(viz, downstreamFilter, "__ALL__");
       }
+      await clearTableauExtraFilters(viz);
       await backgroundRefresh(viz, dashboardKey, newSelections, seq);
     });
   };
@@ -505,9 +962,11 @@ const Landing = ({ idleCountParam }) => {
 
   const getDetailsCandidateSegments = () => {
     const client = clientGroup || defaultGroup;
-    const filterSegments = FILTER_ORDER.filter(
-      (name) => filterSelections[name] !== undefined
-    ).map((name) => filterSelections[name]);
+    const departmentField = getDepartmentFieldName();
+    const orderedNames = [departmentField, ...TOP_FILTER_ORDER];
+    const filterSegments = orderedNames
+      .filter((name) => filterSelections[name] !== undefined)
+      .map((name) => filterSelections[name]);
     return [client, ...filterSegments];
   };
 
@@ -531,21 +990,24 @@ const Landing = ({ idleCountParam }) => {
     });
   };
 
-  const handleButtonClick = (tabIndex, tabText) => {
+  const handleTimelineClick = () => {
     validUserContext.localAuthCheck(false);
-    setActiveButton(tabIndex);
-    setActiveURL(currentLinks[tabIndex]);
-    setActiveDashboard(true);
-    setActiveDashboardId(currentIds[tabIndex]);
-    setVizReady(false);
-    setFilterLoading(false);
-    filterOpSeqRef.current++;
-    setDashboardFilters(getCachedFilters(currentLinks[tabIndex]));
+    setEmbedContent("timeline");
+    setActiveNavRole("timeline");
     setFilterSelections({});
-    setDisplayTabs(false);
     if (isMobileDevice()) {
       setMenuOpen(false);
     }
+  };
+
+  const handleOverviewClick = () => {
+    pendingDepartmentRef.current = null;
+    openSheet("overview", { clearFilters: true });
+  };
+
+  const handleFundingClick = (role) => {
+    pendingDepartmentRef.current = null;
+    openSheet(role, { clearFilters: true });
   };
 
   const handleMenuClick = () => {
@@ -553,47 +1015,55 @@ const Landing = ({ idleCountParam }) => {
   };
 
   const renderContent = () => {
-    if (activeDashboard && activeURL) {
-      return (
-        <Dashboard
-          dashboardLinkProp={activeURL}
-          displayTabs={displayTabs}
-          idleCount={idleCount}
-          onDashboardReady={handleDashboardReady}
-        />
-      );
-    }
-    return <div />;
+    const timelineClient = (clientGroup || defaultGroup || "").toLowerCase();
+    return (
+      <>
+        {activeDashboard && activeURL ? (
+          <div
+            style={{
+              display: embedContent === "timeline" ? "none" : "contents",
+            }}
+          >
+            <Dashboard
+              dashboardLinkProp={vizSrcLink}
+              displayTabs={displayTabs}
+              idleCount={idleCount}
+              onDashboardReady={handleDashboardReady}
+            />
+          </div>
+        ) : null}
+        {embedContent === "timeline" ? (
+          <ProjectTimeline clientKey={timelineClient} />
+        ) : null}
+      </>
+    );
   };
 
   const setSelectedClient = (event) => {
-    const newFilteredNav = sortedNav.filter(([, value]) => value.client === event);
-    const nextFlat = flattenNav(newFilteredNav);
-    const nextButtons = nextFlat.map((n) => n.label);
-    const nextLinks = nextFlat.map((n) => n.link);
-    const nextIds = nextFlat.map((n) => n.id);
-
-    setVizReady(false);
-    setFilterLoading(false);
-    filterOpSeqRef.current++;
-    setDashboardFilters(getCachedFilters(nextLinks[0]));
-    setFilterSelections({});
     setDefaultGroup(event);
-    setCurrentButtons(nextButtons);
-    setCurrentLinks(nextLinks);
-    setCurrentIds(nextIds);
-    setActiveButton(0);
-    setActiveURL(nextLinks[0]);
-    setActiveDashboardId(nextIds[0]);
+    setVizReady(false);
+    setEmbedContent("dashboard");
+    setActiveNavRole("overview");
+    pendingDepartmentRef.current = null;
+    filterOpSeqRef.current++;
+    setFilterSelections({});
+    const overview = sheetMapRef.current.overview;
+    if (overview?.link) {
+      activeURLRef.current = overview.link;
+      setActiveURL(overview.link);
+      setVizSrcLink(overview.link);
+      setActiveDashboardId(overview.id);
+      syncFiltersFromRows({});
+    }
   };
 
   const renderDetailsOverlay = () => {
     if (!detailsOverlayOpen) {
       return null;
     }
-    const selectionCrumbs = FILTER_ORDER.filter(
-      (name) => filterSelections[name] !== undefined
-    ).map((name) => filterSelections[name]);
+    const selectionCrumbs = [getDepartmentFieldName(), ...TOP_FILTER_ORDER]
+      .filter((name) => filterSelections[name] !== undefined)
+      .map((name) => filterSelections[name]);
 
     return (
       <div className={classes.detailsOverlay} onClick={() => setDetailsOverlayOpen(false)}>
@@ -629,90 +1099,111 @@ const Landing = ({ idleCountParam }) => {
     );
   };
 
-  const glanceItems = currentButtons
-    .map((label, index) => ({ label, index }))
-    .filter(({ label }) => !isFundingNavLabel(label));
-  const fundingItems = currentButtons
-    .map((label, index) => ({ label, index }))
-    .filter(({ label }) => isFundingNavLabel(label));
-
-  const departmentValues = getDepartmentValues(activeURL, dashboardFilters);
-  const selectedDepartment = filterSelections[CATEGORY_FILTER];
+  const departmentValues = getDepartmentValues(detailLink, dashboardFilters);
+  const selectedDepartment = getSelectedDepartment(filterSelections);
   const topFilters = orderTopFilters(dashboardFilters);
   const hasTopSelection = TOP_FILTER_ORDER.some(
     (name) => filterSelections[name] !== undefined
   );
+  const onDetail = embedContent === "dashboard" && activeNavRole === "detail";
 
   const randomNumber = Math.floor(Math.random() * 1000000);
   const logoKey = (clientGroup || defaultGroup).toLowerCase();
   const displayName = clientGroup || defaultGroup;
-  const companyLink = `https://storage.googleapis.com/bp_portal_artifacts/${logoKey}.png?v=${randomNumber}`;
-  const defaultLink = `https://storage.googleapis.com/bp_portal_artifacts/bradleypayne.png?v=${randomNumber}`;
+  const legacyLogoLink = `https://storage.googleapis.com/bp_portal_artifacts/${logoKey}.png?v=${randomNumber}`;
+  const defaultLink = `${DEFAULT_LOGO_URL}?v=${randomNumber}`;
+  const companyLink = brandLogoUrl
+    ? `${brandLogoUrl}${brandLogoUrl.includes("?") ? "&" : "?"}v=${randomNumber}`
+    : legacyLogoLink;
+  const themeStyle = { "--client-accent": brandColor || DEFAULT_BRAND_COLOR };
 
   const handleLogoError = (event) => {
-    event.target.src = defaultLink;
+    if (event.target.dataset.fallback === "legacy" || !brandLogoUrl) {
+      event.target.src = defaultLink;
+      return;
+    }
+    event.target.dataset.fallback = "legacy";
+    event.target.src = legacyLogoLink;
   };
 
   const renderSidebarNav = () => (
     <>
       <div className={classes.navSection}>
         <div className={classes.navSectionTitle}>At a Glance</div>
-        {glanceItems.map(({ label, index }) => (
+        <div
+          className={`${classes.sideButton} ${
+            embedContent === "timeline" ? classes.active : ""
+          }`}
+          onClick={handleTimelineClick}
+        >
+          Project Timeline
+        </div>
+        {sheetMap.overview && (
           <div
-            key={`glance-${index}`}
             className={`${classes.sideButton} ${
-              activeButton === index && !selectedDepartment ? classes.active : ""
+              embedContent === "dashboard" && activeNavRole === "overview"
+                ? classes.active
+                : ""
             }`}
-            onClick={() => handleButtonClick(index, label)}
+            onClick={handleOverviewClick}
           >
-            {label.replace(/^\d+\.\s*/, "")}
+            Capital Plan Overview
           </div>
-        ))}
+        )}
       </div>
 
       <div className={classes.navSection}>
         <div className={classes.navSectionTitle}>Departments</div>
-        {departmentValues.length === 0 ? (
-          <div className={classes.navEmpty}>Loading departments…</div>
-        ) : (
-          departmentValues.map((value) => (
-            <div
-              key={value}
-              className={`${classes.sideButton} ${
-                selectedDepartment === value ? classes.active : ""
-              } ${filterLoading ? classes.sideButtonDisabled : ""}`}
-              onClick={() => handleDepartmentSelect(value)}
-            >
-              {value}
-            </div>
-          ))
-        )}
+        {departmentValues.map((value) => (
+          <div
+            key={value}
+            className={`${classes.sideButton} ${
+              onDetail && selectedDepartment === value ? classes.active : ""
+            }`}
+            onClick={() => handleDepartmentSelect(value)}
+          >
+            {value}
+          </div>
+        ))}
       </div>
 
-      {fundingItems.length > 0 && (
+      {(sheetMap.forecast || sheetMap.financing) && (
         <div className={classes.navSection}>
           <div className={classes.navSectionTitle}>Funding</div>
-          {fundingItems.map(({ label, index }) => (
+          {sheetMap.forecast && (
             <div
-              key={`funding-${index}`}
               className={`${classes.sideButton} ${
-                activeButton === index && !selectedDepartment ? classes.active : ""
+                embedContent === "dashboard" && activeNavRole === "forecast"
+                  ? classes.active
+                  : ""
               }`}
-              onClick={() => handleButtonClick(index, label)}
+              onClick={() => handleFundingClick("forecast")}
             >
-              {label.replace(/^\d+\.\s*/, "")}
+              Forecast
             </div>
-          ))}
+          )}
+          {sheetMap.financing && (
+            <div
+              className={`${classes.sideButton} ${
+                embedContent === "dashboard" && activeNavRole === "financing"
+                  ? classes.active
+                  : ""
+              }`}
+              onClick={() => handleFundingClick("financing")}
+            >
+              Financing
+            </div>
+          )}
         </div>
       )}
     </>
   );
 
   const renderTopFilters = () => {
-    if (!activeDashboard) {
+    if (!onDetail) {
       return null;
     }
-    const interactionDisabled = !vizReady || filterLoading;
+    const interactionDisabled = !vizReady;
     const filtersToShow =
       topFilters.length > 0
         ? topFilters
@@ -763,7 +1254,7 @@ const Landing = ({ idleCountParam }) => {
             Clear
           </button>
         )}
-        {filterSelections[CATEGORY_FILTER] !== undefined && (
+        {selectedDepartment !== undefined && (
           <button
             className={classes.detailsButton}
             onClick={handleOpenDetails}
@@ -828,7 +1319,7 @@ const Landing = ({ idleCountParam }) => {
   );
 
   const renderEmbedShell = () => (
-    <div className={classes.landing}>
+    <div className={classes.landing} style={themeStyle}>
       {renderDetailsOverlay()}
       {renderAppTopBar()}
       <div className={classes.embedBody}>
@@ -849,8 +1340,8 @@ const Landing = ({ idleCountParam }) => {
                     onChange={(e) => setSelectedClient(e.target.value)}
                     className={classes.selectDropdown}
                   >
-                    {clientList.map((client, index) => (
-                      <option key={index} value={client}>
+                    {adminDistrictNames.map((client) => (
+                      <option key={client} value={client}>
                         {client}
                       </option>
                     ))}
@@ -874,15 +1365,14 @@ const Landing = ({ idleCountParam }) => {
           }`}
         >
           {renderTopFilters()}
-          <div className={classes.dashboardblock} ref={dashboardRef}>
-            {filterLoading && (
-              <div className={classes.filterLoadingOverlay} aria-live="polite">
-                <div className={classes.filterLoadingCard}>
-                  <div className={classes.filterLoadingSpinner} />
-                  <div className={classes.filterLoadingText}>Updating view…</div>
-                </div>
-              </div>
-            )}
+          <div
+            className={`${classes.dashboardblock} ${
+              embedContent === "timeline" || !onDetail
+                ? classes.dashboardblockTall
+                : ""
+            }`}
+            ref={dashboardRef}
+          >
             {renderContent()}
           </div>
         </div>
@@ -890,16 +1380,41 @@ const Landing = ({ idleCountParam }) => {
     </div>
   );
 
+  if (portalView === "admin" && isSiteAdmin) {
+    return (
+      <div style={themeStyle}>
+        <AdminPanel
+          onBack={() => setPortalView("home")}
+          onLogout={handleLogoutClick}
+        />
+      </div>
+    );
+  }
+
   if (portalView === "home") {
     return (
-      <PortalHome
-        clientName={displayName}
-        clientLogoUrl={companyLink}
-        fallbackLogoUrl={defaultLink}
-        heroImageUrl={heroFallback}
-        onOpenCapitalPlan={() => setPortalView("capital-plan")}
-        onLogout={handleLogoutClick}
-      />
+      <div style={themeStyle}>
+        <PortalHome
+          clientName={displayName}
+          clientLogoUrl={companyLink}
+          fallbackLogoUrl={defaultLink}
+          heroImageUrl={heroFallback}
+          showAdmin={isSiteAdmin}
+          onOpenAdmin={() => setPortalView("admin")}
+          onOpenCapitalPlan={() => {
+            setActiveNavRole("overview");
+            setEmbedContent("dashboard");
+            if (sheetMap.overview?.link) {
+              activeURLRef.current = sheetMap.overview.link;
+              setActiveURL(sheetMap.overview.link);
+              setVizSrcLink(sheetMap.overview.link);
+              setActiveDashboardId(sheetMap.overview.id);
+            }
+            setPortalView("capital-plan");
+          }}
+          onLogout={handleLogoutClick}
+        />
+      </div>
     );
   }
 

@@ -199,7 +199,7 @@
 
   // ── App shell (post-redesign) ──────────────────────────────────────────────
 
-  $header-yellow: #e6b422;
+  $header-yellow: var(--client-accent, #e6b422);
   $app-top-bar-height: 68px;
 
   .appTopBar {
@@ -393,6 +393,10 @@
     background-color: $back-color;
     overflow: auto;
     position: relative;
+  }
+
+  .dashboardblockTall {
+    height: calc(100vh - 68px);
   }
 
   .filterLoadingOverlay {

@@ -1,0 +1,161 @@
+@import "../variables";
+
+.admin {
+  min-height: 100vh;
+  background-color: #eef1f4;
+  display: flex;
+  flex-direction: column;
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 28px;
+  background: $surface-white;
+  border-bottom: 1px solid #e3e7eb;
+  box-sizing: border-box;
+}
+
+.brandText {
+  min-width: 0;
+  text-align: left;
+}
+
+.brandName {
+  font-size: 18px;
+  font-weight: 700;
+  color: $brand-black;
+}
+
+.brandTagline {
+  font-size: 12px;
+  color: $text-muted;
+  margin-top: 2px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.secondaryBtn {
+  border: 1px solid $brand-cool-gray;
+  background-color: $surface-white;
+  color: $brand-black;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+
+  &:hover {
+    background-color: $brand-cloud;
+  }
+}
+
+.body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 28px 28px;
+  box-sizing: border-box;
+  min-height: 0;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.tab {
+  border: 1px solid $brand-cool-gray;
+  background: $surface-white;
+  color: $text-muted;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+
+  &:hover {
+    color: $brand-black;
+    background: $brand-cloud;
+  }
+}
+
+.tabActive {
+  color: $surface-white;
+  background: $brand-teal;
+  border-color: $brand-teal;
+
+  &:hover {
+    color: $surface-white;
+    background: $brand-teal-hover;
+  }
+}
+
+.content {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.comingSoon {
+  height: 100%;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 10px;
+  background: $surface-white;
+  border: 1px solid $brand-cool-gray;
+  border-radius: 14px;
+  padding: 40px;
+  box-sizing: border-box;
+}
+
+.soonBadge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: $brand-teal-deep;
+  background: $brand-teal-12;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.soonTitle {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: $brand-black;
+}
+
+.soonCopy {
+  margin: 0;
+  max-width: 480px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: $text-muted;
+}
+
+@media all and (max-width: 700px) {
+  .topBar,
+  .body {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .tabs {
+    flex-wrap: wrap;
+  }
+}

@@ -31,28 +31,44 @@ const Dashboard = ({dashboardLinkProp, displayTabs, onDashboardReady}) => {
       return /Mobi|Android/i.test(navigator.userAgent);
     };
 
+    const buildDashboardUrl = (link) =>
+      "https://us-east-1.online.tableau.com/#/site/bradleypayneplatform/views/" +
+      (link || "").replace("/sheets", "") +
+      "?:showVizHome=no&:embed=true&:toolbar=no&:tabs=n&refresh=yes";
+
     useEffect(() => {
       setDashboardLink(dashboardLinkProp);
       linkRef.current = dashboardLinkProp;
-      console.log("Reading localstorage")
-      localStorage.setItem("tableauActive", false);
+      setLoaded(false);
+      console.log("Reading localstorage");
       const items = JSON.parse(localStorage.getItem("tabs"));
       if (items) {
         setTabArray(["Loading"]);
       }
 
+      // Keep the same <tableau-viz> instance (JWT is one-time redeemable).
+      // Explicitly update src so sheet switches re-fire firstinteractive.
+      const viz = elementRef.current;
+      if (viz && dashboardLinkProp) {
+        const nextSrc = buildDashboardUrl(dashboardLinkProp);
+        if (viz.src !== nextSrc) {
+          // Mark session still active during in-place sheet switches so the
+          // idle logout timer does not fire mid-navigation.
+          localStorage.setItem("tableauActive", true);
+          viz.src = nextSrc;
+        }
+      }
+
       const timeoutId = setTimeout(() => {
         var tableauActive = JSON.parse(localStorage.getItem("tableauActive"));
         if (tableauActive) {
-          console.log("Tableau session active")
+          console.log("Tableau session active");
         } else {
-          console.log("Tableau session inactive")
-          validUserContext.logoutUser()
+          console.log("Tableau session inactive");
+          validUserContext.logoutUser();
         }
-
       }, 30000);
-  
-      // Cleanup function to clear the timeout if the component unmounts
+
       return () => clearTimeout(timeoutId);
     }, [dashboardLinkProp]);
 
@@ -149,7 +165,6 @@ const Dashboard = ({dashboardLinkProp, displayTabs, onDashboardReady}) => {
 
     var jwtToken = JSON.parse(localStorage.getItem("tableau-login-data"));
     localStorage.setItem("tableau-login-data", JSON.stringify("redeemed"));
-    var dashboardURL = JSON.parse(localStorage.getItem("dashboard-url"));
 
     var inputProps = {
     };
@@ -157,8 +172,7 @@ const Dashboard = ({dashboardLinkProp, displayTabs, onDashboardReady}) => {
     if (jwtToken != "redeemed") {
       inputProps.token = jwtToken;
     }
-    // dashboardURL = dashboardURL + dashboardLink.replace('/sheets','') + '?:showVizHome=no&:embed=true&:toolbar=no&:tabs=n&refresh=yes'
-    dashboardURL = "https://us-east-1.online.tableau.com/#/site/bradleypayneplatform/views/" + dashboardLink.replace('/sheets','') + '?:showVizHome=no&:embed=true&:toolbar=no&:tabs=n&refresh=yes'
+    const dashboardURL = buildDashboardUrl(dashboardLink);
 
     console.log("Loading dashboard.");
 

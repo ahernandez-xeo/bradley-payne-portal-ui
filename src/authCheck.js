@@ -254,6 +254,10 @@ export const ValidUserContextProvider = (props) => {
           localStorage.setItem("client_logo", JSON.stringify(data.client_logo));
           localStorage.setItem("ms_download_url", JSON.stringify(data.ms_download_url));
           localStorage.setItem("client_list", JSON.stringify(data.client_list));
+          localStorage.setItem("district_id", JSON.stringify(data.district_id || ""));
+          localStorage.setItem("district_name", JSON.stringify(data.district_name || ""));
+          localStorage.setItem("logo_url", JSON.stringify(data.logo_url || ""));
+          localStorage.setItem("custom_color", JSON.stringify(data.custom_color || "#e6b422"));
           localStorage.setItem("role", JSON.stringify(data.role));
           setIsLoggedIn(data.app_jwt);
         } else {
@@ -311,6 +315,10 @@ export const ValidUserContextProvider = (props) => {
           localStorage.setItem("client_logo", JSON.stringify(data.client_logo));
           localStorage.setItem("ms_download_url", JSON.stringify(data.ms_download_url));
           localStorage.setItem("client_list", JSON.stringify(data.client_list));
+          localStorage.setItem("district_id", JSON.stringify(data.district_id || ""));
+          localStorage.setItem("district_name", JSON.stringify(data.district_name || ""));
+          localStorage.setItem("logo_url", JSON.stringify(data.logo_url || ""));
+          localStorage.setItem("custom_color", JSON.stringify(data.custom_color || "#e6b422"));
           localStorage.setItem("role", JSON.stringify(data.role));
 
         } 

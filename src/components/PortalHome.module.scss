@@ -1,6 +1,6 @@
 @import "../variables";
 
-$header-yellow: #e6b422;
+$header-yellow: var(--client-accent, #e6b422);
 
 .home {
   min-height: 100vh;
@@ -54,6 +54,14 @@ $header-yellow: #e6b422;
   letter-spacing: 0.2px;
 }
 
+.topBarActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.adminBtn,
 .logoutBtn {
   appearance: none;
   border: 1px solid #d0d5da;
@@ -70,6 +78,17 @@ $header-yellow: #e6b422;
   &:hover {
     border-color: $accent-theme;
     color: $accent-theme;
+  }
+}
+
+.adminBtn {
+  border-color: $brand-teal;
+  color: $brand-teal;
+
+  &:hover {
+    background: $brand-teal-12;
+    border-color: $brand-teal-hover;
+    color: $brand-teal-hover;
   }
 }
 

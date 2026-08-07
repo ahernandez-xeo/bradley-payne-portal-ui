@@ -1,0 +1,208 @@
+@import "../variables";
+
+$header-yellow: var(--client-accent, #e6b422);
+$marker-dark: #1f2a37;
+
+.wrap {
+  padding: 28px 32px 48px;
+  box-sizing: border-box;
+  min-height: 100%;
+  background: #eef1f4;
+}
+
+.headerRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+
+.title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.subtitle {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.totalBlock {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.totalLabel {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.totalValue {
+  margin-top: 4px;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 980px;
+}
+
+.yearRow {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 18px;
+  align-items: stretch;
+}
+
+.rail {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 8px;
+}
+
+.marker {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  z-index: 1;
+  flex-shrink: 0;
+}
+
+.markerEven {
+  background: $header-yellow;
+  color: #1a1a1a;
+}
+
+.markerOdd {
+  background: $marker-dark;
+  color: #ffffff;
+}
+
+.phase {
+  margin-top: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.25;
+  max-width: 88px;
+}
+
+.railLine {
+  position: absolute;
+  top: 56px;
+  bottom: -26px;
+  width: 2px;
+  background: #d5dae0;
+  z-index: 0;
+}
+
+.card {
+  background: $surface-white;
+  border: 1px solid #e3e7eb;
+  border-radius: 14px;
+  padding: 18px 22px 16px;
+  box-shadow: 0 6px 18px rgba(30, 40, 55, 0.05);
+}
+
+.cardTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.headline {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.35;
+  font-weight: 700;
+  color: var(--text-strong);
+  flex: 1;
+}
+
+.yearTotal {
+  flex-shrink: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: $header-yellow;
+}
+
+.bullets {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: var(--text-body);
+  font-size: 14px;
+  line-height: 1.55;
+
+  li + li {
+    margin-top: 4px;
+  }
+}
+
+.stateCard {
+  background: $surface-white;
+  border: 1px solid #e3e7eb;
+  border-radius: 12px;
+  padding: 28px;
+  max-width: 560px;
+  color: var(--text-body);
+  font-size: 14px;
+}
+
+.stateTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-strong);
+  margin-bottom: 8px;
+}
+
+.stateCopy {
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+@media (max-width: 800px) {
+  .wrap {
+    padding: 20px 16px 40px;
+  }
+
+  .headerRow {
+    flex-direction: column;
+  }
+
+  .totalBlock {
+    text-align: left;
+  }
+
+  .yearRow {
+    grid-template-columns: 72px 1fr;
+    gap: 12px;
+  }
+
+  .marker {
+    width: 40px;
+    height: 40px;
+    font-size: 12px;
+  }
+}
