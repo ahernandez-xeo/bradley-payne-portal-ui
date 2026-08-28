@@ -68,11 +68,107 @@
   color: $brand-black;
 }
 
+.sectionIntro {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 720px;
+}
+
+.sectionLead {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 400;
+  color: $text-muted;
+  line-height: 1.45;
+}
+
+.progressMeta {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 400;
+  color: $brand-black;
+
+  strong {
+    font-weight: 700;
+  }
+}
+
+.workBlock,
+.aiPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 720px;
+  width: 100%;
+  padding: 16px;
+  border: 1px solid $brand-cool-gray;
+  border-radius: 12px;
+  background: $brand-cloud;
+  box-sizing: border-box;
+}
+
+.aiPanel {
+  background: $surface-white;
+}
+
+.workBlockHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.workBlockTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: $brand-black;
+}
+
+.workBlockHint {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 400;
+  color: $text-muted;
+  line-height: 1.45;
+}
+
+.pairGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.editorBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.editorHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.editorLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: $brand-black;
+}
+
 .form {
   display: flex;
   flex-direction: column;
   gap: 18px;
   max-width: 720px;
+  width: 100%;
 }
 
 .plainText {
@@ -293,6 +389,15 @@
 .formActions {
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.formActionsStart {
+  display: flex;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .primaryBtn {
@@ -316,6 +421,27 @@
   }
 }
 
+.secondaryBtn {
+  border: 1px solid $brand-cool-gray;
+  background-color: $surface-white;
+  color: $brand-black;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  &:hover:not(:disabled) {
+    background-color: $brand-cloud;
+  }
+}
+
 .placeholder {
   padding: 24px 0;
   color: $text-muted;
@@ -324,7 +450,13 @@
 
 @media all and (max-width: 700px) {
   .optionsGrid,
-  .logoSection {
+  .logoSection,
+  .pairGrid {
     grid-template-columns: 1fr;
+  }
+
+  .editorHeader {
+    flex-direction: column;
+    align-items: stretch;
   }
 }

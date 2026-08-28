@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 
 import classes from "./NarrativeMapping.module.scss";
-import SimpleRichTextEditor, { htmlToPlainText } from "./SimpleRichTextEditor";
+import { htmlToPlainText } from "./SimpleRichTextEditor";
 import {
   fetchAdminDistricts,
   fetchDistrictBranding,
   fetchDistrictLocations,
   fetchLocationNarrative,
+  generateAllMissingNarratives,
+  generateLocationNarrative,
   saveDistrictBranding,
   saveLocationNarrative,
   uploadDistrictLogo,
@@ -30,6 +32,7 @@ const groupLocationsByType = (items) => {
       groups.push({ locationType, locations: [] });
     }
     groups[indexByType.get(locationType)].locations.push({
+      category: item.category || "",
       location: locationName,
       has_image: !!item.has_image,
       has_narrative: !!item.has_narrative,
@@ -52,9 +55,11 @@ const locationOptionLabel = (item) => {
   return `${item.location} — missing ${missing.join(" & ")}`;
 };
 
-const patchLocationStatus = (list, locationName, patch) =>
+const patchPairStatus = (list, categoryName, locationName, patch) =>
   (list || []).map((item) =>
-    item.location === locationName ? { ...item, ...patch } : item
+    item.category === categoryName && item.location === locationName
+      ? { ...item, ...patch }
+      : item
   );
 
 const NarrativeMapping = () => {
@@ -68,34 +73,65 @@ const NarrativeMapping = () => {
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
   const [locations, setLocations] = useState([]);
+  const [category, setCategory] = useState("");
   const [location, setLocation] = useState("");
   const [imageUrl, setImageUrl] = useState("");
-  const [narrativeHtml, setNarrativeHtml] = useState("");
   const [narrativeText, setNarrativeText] = useState("");
   const [loadingLocations, setLoadingLocations] = useState(false);
   const [loadingNarrative, setLoadingNarrative] = useState(false);
   const [savingNarrative, setSavingNarrative] = useState(false);
+  const [generatingNarrative, setGeneratingNarrative] = useState(false);
+  const [generatingAllNarratives, setGeneratingAllNarratives] = useState(false);
+  const [customInstructions, setCustomInstructions] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
 
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
   const selectedDistrict = districts.find((d) => d.district_id === districtId);
-  const locationGroups = useMemo(
-    () => groupLocationsByType(locations),
-    [locations]
+
+  const categories = useMemo(() => {
+    const names = [];
+    const seen = new Set();
+    for (const item of locations) {
+      const name = (item.category || "").trim();
+      if (!name || seen.has(name)) {
+        continue;
+      }
+      seen.add(name);
+      names.push(name);
+    }
+    return names.sort((a, b) => a.localeCompare(b));
+  }, [locations]);
+
+  const locationsForCategory = useMemo(
+    () => locations.filter((item) => item.category === category),
+    [locations, category]
   );
+
+  const locationGroups = useMemo(
+    () => groupLocationsByType(locationsForCategory),
+    [locationsForCategory]
+  );
+
   const selectedLocationMeta = useMemo(
-    () => locations.find((item) => item.location === location) || null,
-    [locations, location]
+    () =>
+      locations.find(
+        (item) => item.category === category && item.location === location
+      ) || null,
+    [locations, category, location]
   );
   const selectedMissingImage = selectedLocationMeta
     ? !selectedLocationMeta.has_image
     : !imageUrl;
   const selectedMissingNarrative = selectedLocationMeta
     ? !selectedLocationMeta.has_narrative
-    : !htmlToPlainText(narrativeHtml || "").trim() &&
-      !(narrativeText || "").trim();
+    : !(narrativeText || "").trim();
+
+  const missingNarrativeCount = useMemo(
+    () => locations.filter((item) => !item.has_narrative).length,
+    [locations]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -126,10 +162,10 @@ const NarrativeMapping = () => {
     setLoadingLocations(true);
     setError("");
     setNotice("");
+    setCategory("");
     setLocation("");
     setLocations([]);
     setImageUrl("");
-    setNarrativeHtml("");
     setNarrativeText("");
 
     Promise.all([
@@ -143,7 +179,13 @@ const NarrativeMapping = () => {
         setLogoUrl(branding.logo_url || "");
         const list = locationsData.locations || [];
         setLocations(list);
-        setLocation(list[0]?.location || "");
+        const firstCategory = list[0]?.category || "";
+        setCategory(firstCategory);
+        const firstLocation =
+          list.find((item) => item.category === firstCategory)?.location ||
+          list[0]?.location ||
+          "";
+        setLocation(firstLocation);
       })
       .catch((err) => {
         if (!cancelled) setError(err.message);
@@ -161,25 +203,40 @@ const NarrativeMapping = () => {
   }, [districtId]);
 
   useEffect(() => {
-    if (!districtId || !location) return undefined;
+    if (!category) {
+      setLocation("");
+      return;
+    }
+    const stillValid = locations.some(
+      (item) => item.category === category && item.location === location
+    );
+    if (stillValid) {
+      return;
+    }
+    const nextLocation =
+      locations.find((item) => item.category === category)?.location || "";
+    setLocation(nextLocation);
+  }, [category, locations, location]);
+
+  useEffect(() => {
+    if (!districtId || !category || !location) return undefined;
     let cancelled = false;
     setLoadingNarrative(true);
     setError("");
-    fetchLocationNarrative(districtId, location)
+    fetchLocationNarrative(districtId, category, location)
       .then((data) => {
         if (cancelled) return;
         const narrative = data.narrative || {};
         const nextImage = narrative.image_url || "";
-        const nextHtml = narrative.narrative_html || "";
-        const nextText = narrative.narrative_text || "";
+        const nextText =
+          (narrative.narrative_text || "").trim() ||
+          htmlToPlainText(narrative.narrative_html || "");
         setImageUrl(nextImage);
-        setNarrativeHtml(nextHtml);
         setNarrativeText(nextText);
         setLocations((current) =>
-          patchLocationStatus(current, location, {
+          patchPairStatus(current, category, location, {
             has_image: !!nextImage.trim(),
-            has_narrative:
-              !!htmlToPlainText(nextHtml).trim() || !!nextText.trim(),
+            has_narrative: !!nextText.trim(),
           })
         );
       })
@@ -192,7 +249,7 @@ const NarrativeMapping = () => {
     return () => {
       cancelled = true;
     };
-  }, [districtId, location]);
+  }, [districtId, category, location]);
 
   const handleSaveBranding = async (event) => {
     event.preventDefault();
@@ -244,41 +301,34 @@ const NarrativeMapping = () => {
     }
   };
 
-  const handleNarrativeChange = (html, plain) => {
-    setNarrativeHtml(html);
-    setNarrativeText(plain);
-  };
-
   const handleSaveNarrative = async (event) => {
     event.preventDefault();
-    if (!districtId || !location) return;
+    if (!districtId || !category || !location) return;
     setSavingNarrative(true);
     setError("");
     setNotice("");
     try {
-      const plain = narrativeText || htmlToPlainText(narrativeHtml);
+      const plain = (narrativeText || "").trim();
       const result = await saveLocationNarrative({
         district_id: districtId,
+        category,
         location,
         image_url: imageUrl || undefined,
-        narrative_html: narrativeHtml,
+        narrative_html: "",
         narrative_text: plain,
       });
       const narrative = result.narrative || {};
       const nextImage = narrative.image_url || imageUrl;
-      const nextHtml = narrative.narrative_html || narrativeHtml;
       const nextText = narrative.narrative_text || plain;
       setImageUrl(nextImage);
-      setNarrativeHtml(nextHtml);
       setNarrativeText(nextText);
       setLocations((current) =>
-        patchLocationStatus(current, location, {
+        patchPairStatus(current, category, location, {
           has_image: !!(nextImage || "").trim(),
-          has_narrative:
-            !!htmlToPlainText(nextHtml || "").trim() || !!(nextText || "").trim(),
+          has_narrative: !!(nextText || "").trim(),
         })
       );
-      setNotice(`Narrative saved for ${location}.`);
+      setNotice(`Narrative saved for ${category} / ${location}.`);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -286,10 +336,109 @@ const NarrativeMapping = () => {
     }
   };
 
+  const handleGenerateNarrative = async () => {
+    if (!districtId || !category || !location) return;
+    setGeneratingNarrative(true);
+    setError("");
+    setNotice("");
+    try {
+      const result = await generateLocationNarrative({
+        district_id: districtId,
+        category,
+        location,
+        district_name: selectedDistrict?.district_name || "",
+        custom_instructions: customInstructions.trim() || undefined,
+      });
+      const draft = (result.narrative_text || "").trim();
+      if (!draft) {
+        throw new Error("AI returned an empty narrative.");
+      }
+      setNarrativeText(draft);
+      setNotice(
+        `Draft ready for ${category} / ${location}. Review the text, then save.`
+      );
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGeneratingNarrative(false);
+    }
+  };
+
+  const handleGenerateAllNarratives = async () => {
+    if (!districtId || generatingAllNarratives) return;
+    if (missingNarrativeCount === 0) {
+      setNotice("All category/location pairs already have narratives.");
+      return;
+    }
+    const confirmed = window.confirm(
+      `Fill and save narratives for ${missingNarrativeCount} missing ` +
+        `category/location pair${missingNarrativeCount === 1 ? "" : "s"}?\n\n` +
+        "Existing narratives will be skipped. This may take a few minutes."
+    );
+    if (!confirmed) return;
+
+    setGeneratingAllNarratives(true);
+    setError("");
+    setNotice(
+      `Generating ${missingNarrativeCount} missing narrative${
+        missingNarrativeCount === 1 ? "" : "s"
+      }… This can take a while.`
+    );
+    try {
+      const result = await generateAllMissingNarratives({
+        district_id: districtId,
+        district_name: selectedDistrict?.district_name || "",
+        custom_instructions: customInstructions.trim() || undefined,
+      });
+      const locationsData = await fetchDistrictLocations(districtId);
+      setLocations(locationsData.locations || []);
+
+      if (category && location) {
+        const refreshed = await fetchLocationNarrative(
+          districtId,
+          category,
+          location
+        );
+        const narrative = refreshed.narrative || {};
+        setImageUrl(narrative.image_url || "");
+        setNarrativeText(
+          (narrative.narrative_text || "").trim() ||
+            htmlToPlainText(narrative.narrative_html || "")
+        );
+      }
+
+      const generated = result.generated || 0;
+      const skipped = result.skipped_existing || 0;
+      const failed = result.failed || 0;
+      const failureHint =
+        failed > 0
+          ? ` ${failed} failed${
+              result.failures?.[0]?.error
+                ? ` (e.g. ${result.failures[0].category} / ${result.failures[0].location}: ${result.failures[0].error})`
+                : ""
+            }.`
+          : "";
+      setNotice(
+        `Bulk generate finished: ${generated} saved, ${skipped} skipped (already had text).${failureHint}`
+      );
+      if (failed > 0 && generated === 0) {
+        setError(
+          result.failures?.[0]?.error ||
+            "All bulk narrative generations failed."
+        );
+      }
+    } catch (err) {
+      setError(err.message);
+      setNotice("");
+    } finally {
+      setGeneratingAllNarratives(false);
+    }
+  };
+
   const handleImageChange = async (event) => {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file || !districtId || !location) return;
+    if (!file || !districtId || !category || !location) return;
 
     setUploadingImage(true);
     setError("");
@@ -298,6 +447,7 @@ const NarrativeMapping = () => {
       const { file: uploadFile, compressed } = await prepareImageForUpload(file);
       const result = await uploadLocationNarrativeImage(
         districtId,
+        category,
         location,
         uploadFile
       );
@@ -305,7 +455,7 @@ const NarrativeMapping = () => {
       const nextImage = narrative.image_url || "";
       setImageUrl(nextImage);
       setLocations((current) =>
-        patchLocationStatus(current, location, {
+        patchPairStatus(current, category, location, {
           has_image: !!(nextImage || "").trim(),
         })
       );
@@ -327,7 +477,7 @@ const NarrativeMapping = () => {
         <div>
           <h2 className={classes.title}>Narrative Mapping</h2>
           <p className={classes.subtitle}>
-            District branding and per-location narrative content.
+            District branding and per-category location narrative content.
           </p>
         </div>
       </div>
@@ -428,136 +578,300 @@ const NarrativeMapping = () => {
           </section>
 
           <section className={classes.section}>
-            <h3 className={classes.sectionTitle}>Location narratives</h3>
+            <div className={classes.sectionIntro}>
+              <h3 className={classes.sectionTitle}>Location narratives</h3>
+              <p className={classes.sectionLead}>
+                Choose a category and location to edit its image and text, or use
+                bulk AI below to fill every pair that is still missing narrative
+                text.
+              </p>
+              {!loadingLocations && locations.length > 0 && (
+                <p className={classes.progressMeta} aria-live="polite">
+                  <strong>
+                    {locations.length - missingNarrativeCount} of {locations.length}
+                  </strong>{" "}
+                  pairs have narrative text
+                  {missingNarrativeCount > 0
+                    ? ` · ${missingNarrativeCount} still missing`
+                    : " · all complete"}
+                </p>
+              )}
+            </div>
+
             {loadingLocations ? (
-              <div className={classes.placeholder}>Loading locations…</div>
+              <div className={classes.placeholder}>Loading categories and locations…</div>
             ) : locations.length === 0 ? (
               <div className={classes.placeholder}>
-                No locations found in dim_locations for this district.
+                No category/location pairs with non-zero expense found for this district.
               </div>
             ) : (
-              <form className={classes.form} onSubmit={handleSaveNarrative}>
-                <label className={classes.field}>
-                  <span>Location</span>
-                  <select
-                    value={location}
-                    onChange={(event) => setLocation(event.target.value)}
-                    required
-                  >
-                    {locationGroups.map((group) => (
-                      <optgroup key={group.locationType} label={group.locationType}>
-                        {group.locations.map((item) => (
-                          <option
-                            key={`${group.locationType}:${item.location}`}
-                            value={item.location}
-                          >
-                            {locationOptionLabel(item)}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                </label>
-
-                {(selectedMissingImage || selectedMissingNarrative) && (
-                  <div className={classes.statusRow} aria-live="polite">
-                    {selectedMissingImage && (
-                      <span className={classes.statusChipMissing}>Missing image</span>
-                    )}
-                    {selectedMissingNarrative && (
-                      <span className={classes.statusChipMissing}>Missing text</span>
-                    )}
-                    <span className={classes.statusHint}>
-                      Complete both for this location.
-                    </span>
+              <>
+                <div className={classes.workBlock}>
+                  <div className={classes.workBlockHeader}>
+                    <h4 className={classes.workBlockTitle}>Edit one pair</h4>
+                    <p className={classes.workBlockHint}>
+                      Changes here apply only to the selected category and location.
+                    </p>
                   </div>
-                )}
 
-                {loadingNarrative ? (
-                  <div className={classes.placeholder}>Loading narrative…</div>
-                ) : (
-                  <>
-                    <div className={classes.logoSection}>
-                      <div className={classes.field}>
-                        <span>
-                          Location image
-                          {selectedMissingImage ? (
-                            <span className={classes.fieldBadgeMissing}>Missing</span>
-                          ) : (
-                            <span className={classes.fieldBadgeReady}>Saved</span>
-                          )}
+                  <form className={classes.form} onSubmit={handleSaveNarrative}>
+                    <div className={classes.pairGrid}>
+                      <label className={classes.field}>
+                        <span>Category / Department</span>
+                        <select
+                          value={category}
+                          onChange={(event) => setCategory(event.target.value)}
+                          required
+                          disabled={generatingAllNarratives}
+                        >
+                          {categories.map((name) => (
+                            <option key={name} value={name}>
+                              {name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className={classes.field}>
+                        <span>Location</span>
+                        <select
+                          value={location}
+                          onChange={(event) => setLocation(event.target.value)}
+                          required
+                          disabled={!category || generatingAllNarratives}
+                        >
+                          {locationGroups.map((group) => (
+                            <optgroup
+                              key={group.locationType}
+                              label={group.locationType}
+                            >
+                              {group.locations.map((item) => (
+                                <option
+                                  key={`${group.locationType}:${item.location}`}
+                                  value={item.location}
+                                >
+                                  {locationOptionLabel(item)}
+                                </option>
+                              ))}
+                            </optgroup>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+
+                    {(selectedMissingImage || selectedMissingNarrative) && (
+                      <div className={classes.statusRow} aria-live="polite">
+                        {selectedMissingImage && (
+                          <span className={classes.statusChipMissing}>
+                            Missing image
+                          </span>
+                        )}
+                        {selectedMissingNarrative && (
+                          <span className={classes.statusChipMissing}>
+                            Missing text
+                          </span>
+                        )}
+                        <span className={classes.statusHint}>
+                          Upload an image and save narrative text for this pair.
                         </span>
-                        <p className={classes.hint}>
-                          Uploads to <code>bp_portal_artifacts</code> under this
-                          district/location.
-                        </p>
-                        <label className={classes.uploadBtn}>
-                          <input
-                            type="file"
-                            accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
-                            onChange={handleImageChange}
-                            disabled={uploadingImage || !location}
+                      </div>
+                    )}
+
+                    {loadingNarrative ? (
+                      <div className={classes.placeholder}>Loading narrative…</div>
+                    ) : (
+                      <>
+                        <div className={classes.logoSection}>
+                          <div className={classes.field}>
+                            <span>
+                              Location image
+                              {selectedMissingImage ? (
+                                <span className={classes.fieldBadgeMissing}>
+                                  Missing
+                                </span>
+                              ) : (
+                                <span className={classes.fieldBadgeReady}>Saved</span>
+                              )}
+                            </span>
+                            <p className={classes.hint}>
+                              Saved immediately on upload for this pair.
+                            </p>
+                            <label className={classes.uploadBtn}>
+                              <input
+                                type="file"
+                                accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                                onChange={handleImageChange}
+                                disabled={
+                                  uploadingImage ||
+                                  !category ||
+                                  !location ||
+                                  generatingAllNarratives
+                                }
+                              />
+                              {uploadingImage ? "Uploading…" : "Upload image"}
+                            </label>
+                          </div>
+                          <div
+                            className={`${classes.logoPreview} ${
+                              selectedMissingImage ? classes.logoPreviewMissing : ""
+                            }`}
+                          >
+                            {imageUrl ? (
+                              <img
+                                src={imageUrl}
+                                alt={`${category} / ${location} visual`}
+                              />
+                            ) : (
+                              <div className={classes.logoEmpty}>
+                                No image saved yet
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className={classes.editorBlock}>
+                          <div className={classes.editorHeader}>
+                            <div>
+                              <span className={classes.editorLabel}>
+                                Narrative text
+                                {selectedMissingNarrative ? (
+                                  <span className={classes.fieldBadgeMissing}>
+                                    Missing
+                                  </span>
+                                ) : (
+                                  <span className={classes.fieldBadgeReady}>
+                                    Saved
+                                  </span>
+                                )}
+                              </span>
+                              <p className={classes.hint}>
+                                Plain text only — Tableau cannot render HTML.
+                                Draft with AI fills the box; Save writes it to
+                                BigQuery.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              className={classes.secondaryBtn}
+                              onClick={handleGenerateNarrative}
+                              disabled={
+                                savingNarrative ||
+                                generatingNarrative ||
+                                generatingAllNarratives ||
+                                uploadingImage ||
+                                !districtId ||
+                                !category ||
+                                !location
+                              }
+                            >
+                              {generatingNarrative
+                                ? "Drafting…"
+                                : "Draft with AI"}
+                            </button>
+                          </div>
+                          <textarea
+                            className={classes.plainText}
+                            value={narrativeText}
+                            onChange={(event) =>
+                              setNarrativeText(event.target.value)
+                            }
+                            rows={10}
+                            disabled={
+                              savingNarrative ||
+                              generatingNarrative ||
+                              generatingAllNarratives ||
+                              uploadingImage
+                            }
+                            placeholder="Write or draft the narrative for this category and location…"
                           />
-                          {uploadingImage ? "Uploading…" : "Upload image"}
-                        </label>
-                      </div>
-                      <div
-                        className={`${classes.logoPreview} ${
-                          selectedMissingImage ? classes.logoPreviewMissing : ""
-                        }`}
-                      >
-                        {imageUrl ? (
-                          <img src={imageUrl} alt={`${location} visual`} />
-                        ) : (
-                          <div className={classes.logoEmpty}>No image saved yet</div>
-                        )}
-                      </div>
-                    </div>
+                          <div className={classes.formActionsStart}>
+                            <button
+                              type="submit"
+                              className={classes.primaryBtn}
+                              disabled={
+                                savingNarrative ||
+                                generatingNarrative ||
+                                generatingAllNarratives ||
+                                uploadingImage ||
+                                !districtId ||
+                                !category ||
+                                !location
+                              }
+                            >
+                              {savingNarrative
+                                ? "Saving…"
+                                : "Save this narrative"}
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </form>
+                </div>
 
-                    <label className={classes.field}>
-                      <span>
-                        Narrative
-                        {selectedMissingNarrative ? (
-                          <span className={classes.fieldBadgeMissing}>Missing</span>
-                        ) : (
-                          <span className={classes.fieldBadgeReady}>Saved</span>
-                        )}
-                      </span>
-                      <p className={classes.hint}>
-                        Rich HTML is stored for display; plain text is saved
-                        automatically as a fallback.
-                      </p>
-                      <SimpleRichTextEditor
-                        value={narrativeHtml}
-                        onChange={handleNarrativeChange}
-                        disabled={savingNarrative || uploadingImage}
-                      />
-                    </label>
+                <div className={classes.aiPanel}>
+                  <div className={classes.workBlockHeader}>
+                    <h4 className={classes.workBlockTitle}>
+                      Fill missing narratives with AI
+                    </h4>
+                    <p className={classes.workBlockHint}>
+                      Runs Gemini for every category/location that still has no
+                      text, then saves each result automatically. Pairs that
+                      already have a narrative are skipped. Does not change
+                      images.
+                    </p>
+                  </div>
 
-                    <label className={classes.field}>
-                      <span>Plain text fallback</span>
-                      <textarea
-                        className={classes.plainText}
-                        value={narrativeText}
-                        onChange={(event) => setNarrativeText(event.target.value)}
-                        rows={5}
-                      />
-                    </label>
+                  <label className={classes.field}>
+                    <span>Custom AI instructions (optional)</span>
+                    <p className={classes.hint}>
+                      Used by both Draft with AI and Fill missing. Example:
+                      “Keep under 80 words” or “Emphasize safety-related work.”
+                    </p>
+                    <textarea
+                      className={classes.plainText}
+                      value={customInstructions}
+                      onChange={(event) =>
+                        setCustomInstructions(event.target.value)
+                      }
+                      rows={3}
+                      maxLength={2000}
+                      disabled={
+                        generatingAllNarratives ||
+                        generatingNarrative ||
+                        savingNarrative
+                      }
+                      placeholder="Optional guidance for how Gemini should write…"
+                    />
+                  </label>
 
-                    <div className={classes.formActions}>
-                      <button
-                        type="submit"
-                        className={classes.primaryBtn}
-                        disabled={
-                          savingNarrative || uploadingImage || !districtId || !location
-                        }
-                      >
-                        {savingNarrative ? "Saving…" : "Save narrative"}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </form>
+                  <div className={classes.formActionsStart}>
+                    <button
+                      type="button"
+                      className={classes.secondaryBtn}
+                      onClick={handleGenerateAllNarratives}
+                      disabled={
+                        !districtId ||
+                        loadingLocations ||
+                        generatingAllNarratives ||
+                        generatingNarrative ||
+                        savingNarrative ||
+                        uploadingImage ||
+                        locations.length === 0 ||
+                        missingNarrativeCount === 0
+                      }
+                    >
+                      {generatingAllNarratives
+                        ? "Filling missing…"
+                        : missingNarrativeCount > 0
+                          ? `Fill ${missingNarrativeCount} missing narrative${
+                              missingNarrativeCount === 1 ? "" : "s"
+                            }`
+                          : "Nothing missing to fill"}
+                    </button>
+                  </div>
+                </div>
+              </>
             )}
           </section>
         </>

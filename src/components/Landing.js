@@ -23,14 +23,23 @@ const DEFAULT_LOGO_URL =
 
 const isMobileDevice = () => /Mobi|Android/i.test(navigator.userAgent);
 
-const FILTER_ORDER = ["Category", "Location Type", "Location"];
-const TOP_FILTER_ORDER = ["Location Type", "Location"];
-/** Still cleared on the Tableau viz when resetting filters (workbook field). */
-const TABLEAU_EXTRA_CLEAR_FILTERS = ["Type"];
+const FILTER_ORDER = ["Category", "Location Type", "LOCATION"];
+const TOP_FILTER_ORDER = ["Location Type", "LOCATION"];
 const CATEGORY_FILTER = "Category";
+/** Exact Tableau caption — Embedding API field names are case-sensitive. */
+const LOCATION_FILTER = "LOCATION";
 /** Tableau may expose the department dimension as Category or Department. */
 const DEPARTMENT_FILTER_ALIASES = ["Category", "Department"];
 const WORKBOOK_NAME = "Xeo Testing II";
+
+const FILTER_DISPLAY_NAMES = {
+  Category: "Category",
+  "Location Type": "Location Type",
+  LOCATION: "Location",
+};
+
+const filterDisplayName = (fieldName) =>
+  FILTER_DISPLAY_NAMES[fieldName] || fieldName;
 
 /**
  * Build Tableau-shaped filter metadata from BigQuery capital-plan rows.
@@ -48,7 +57,7 @@ const buildFiltersFromRows = (rows, selections = {}) => {
     return undefined;
   })();
   const selectedLocationType = selections["Location Type"];
-  const selectedLocation = selections.Location;
+  const selectedLocation = selections[LOCATION_FILTER];
 
   const categoryExpense = {};
   for (const row of list) {
@@ -125,10 +134,10 @@ const buildFiltersFromRows = (rows, selections = {}) => {
       filterType: "categorical",
     },
     {
-      fieldName: "Location",
+      fieldName: LOCATION_FILTER,
       worksheetNames: [],
       values: locations,
-      appliedValues: appliedFor("Location", selectedLocation),
+      appliedValues: appliedFor(LOCATION_FILTER, selectedLocation),
       isAllSelected: !selectedLocation,
       filterType: "categorical",
     },
@@ -593,27 +602,38 @@ const Landing = ({ idleCountParam }) => {
       console.warn("No active sheet available to apply filter");
       return;
     }
+
+    // Apply per worksheet so sheets excluded in the Tableau workbook definition
+    // (e.g. TOTAL CAPITAL PLAN) are not forced through a dashboard-level filter.
     const worksheets =
       activeSheet.sheetType === "dashboard" ? activeSheet.worksheets : [activeSheet];
 
-    let applied = false;
-    for (const worksheet of worksheets) {
-      if ((worksheet.name || "").toUpperCase().includes("TOTAL CAPITAL")) {
-        continue;
-      }
-      try {
-        if (value === "__ALL__") {
-          await worksheet.clearFilterAsync(filter.fieldName);
-        } else {
-          await worksheet.applyFilterAsync(filter.fieldName, [value], "replace");
-        }
-        applied = true;
-      } catch (error) {
-        // Worksheet may not expose this field — continue trying others.
-      }
-    }
+    const targets = worksheets.filter(
+      (worksheet) =>
+        (worksheet.name || "").trim().toUpperCase() !== "TOTAL CAPITAL PLAN"
+    );
 
-    if (!applied) {
+    const results = await Promise.all(
+      targets.map(async (worksheet) => {
+        try {
+          if (value === "__ALL__") {
+            await worksheet.clearFilterAsync(filter.fieldName);
+          } else {
+            await worksheet.applyFilterAsync(
+              filter.fieldName,
+              [value],
+              "replace"
+            );
+          }
+          return true;
+        } catch (error) {
+          // Worksheet may not expose this field — ignore and continue.
+          return false;
+        }
+      })
+    );
+
+    if (!results.some(Boolean)) {
       console.warn(`Unable to apply filter "${filter.fieldName}" to any worksheet`);
     }
   };
@@ -672,12 +692,6 @@ const Landing = ({ idleCountParam }) => {
     return fresh;
   };
 
-  const clearTableauExtraFilters = async (viz) => {
-    for (const name of TABLEAU_EXTRA_CLEAR_FILTERS) {
-      await applyFilterValue(viz, { fieldName: name }, "__ALL__");
-    }
-  };
-
   const applyDepartmentOnViz = async (viz, departmentValue, dashboardKey) => {
     const seq = ++filterOpSeqRef.current;
     const departmentField = getDepartmentFieldName();
@@ -703,7 +717,6 @@ const Landing = ({ idleCountParam }) => {
         const downstreamFilter = resolveFilterMeta(name);
         await applyFilterValue(viz, downstreamFilter, "__ALL__");
       }
-      await clearTableauExtraFilters(viz);
       await backgroundRefresh(viz, dashboardKey, newSelections, seq);
     });
   };
@@ -750,7 +763,6 @@ const Landing = ({ idleCountParam }) => {
         for (const name of TOP_FILTER_ORDER) {
           await applyFilterValue(viz, resolveFilterMeta(name), "__ALL__");
         }
-        await clearTableauExtraFilters(viz);
         await backgroundRefresh(viz, dashboardKey, initialSelections, seq);
       } else {
         await applyFilterValue(
@@ -766,7 +778,6 @@ const Landing = ({ idleCountParam }) => {
         for (const name of TOP_FILTER_ORDER) {
           await applyFilterValue(viz, resolveFilterMeta(name), "__ALL__");
         }
-        await clearTableauExtraFilters(viz);
       }
     });
   };
@@ -822,9 +833,6 @@ const Landing = ({ idleCountParam }) => {
       for (const name of downstream) {
         const downstreamFilter = resolveFilterMeta(name);
         await applyFilterValue(viz, downstreamFilter, "__ALL__");
-      }
-      if (filter.fieldName !== "Location") {
-        await clearTableauExtraFilters(viz);
       }
       await backgroundRefresh(viz, dashboardKey, newSelections, seq);
     });
@@ -980,7 +988,6 @@ const Landing = ({ idleCountParam }) => {
         const downstreamFilter = resolveFilterMeta(name);
         await applyFilterValue(viz, downstreamFilter, "__ALL__");
       }
-      await clearTableauExtraFilters(viz);
       await backgroundRefresh(viz, dashboardKey, newSelections, seq);
     });
   };
@@ -1310,7 +1317,7 @@ const Landing = ({ idleCountParam }) => {
                     onChange={(e) => handleTopFilterChange(filter, e.target.value)}
                   >
                     <option value="">
-                      All {filter.fieldName.replace(/Type$/, "Types")}
+                      All {filterDisplayName(filter.fieldName).replace(/Type$/, "Types")}
                     </option>
                     {(filter.values || []).map((value, valueIndex) => (
                       <option key={valueIndex} value={value}>
@@ -1333,16 +1340,6 @@ const Landing = ({ idleCountParam }) => {
             disabled={interactionDisabled}
           >
             Clear
-          </button>
-        )}
-        {selectedDepartment !== undefined && (
-          <button
-            className={classes.detailsButton}
-            onClick={handleOpenDetails}
-            title="View details for current selection"
-            type="button"
-          >
-            Details
           </button>
         )}
       </div>

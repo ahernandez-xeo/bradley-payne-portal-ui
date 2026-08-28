@@ -27,8 +27,6 @@ export const fetchSubscriptions = async (data) => {
 
 
 export const createSubscription = async (data) => {
-
-    const queryParams = new URLSearchParams(data).toString();
     const response = await fetch(`${BACKEND_BASE_URL}/subscriptions`, {
       method: 'POST',
       headers: {
@@ -44,8 +42,6 @@ export const createSubscription = async (data) => {
 };
   
 export const deleteSubscription = async (data) => {
-
-    const queryParams = new URLSearchParams(data).toString();
     const response = await fetch(`${BACKEND_BASE_URL}/subscriptions`, {
       method: 'DELETE',
       headers: {
@@ -61,8 +57,6 @@ export const deleteSubscription = async (data) => {
 };
 
 export const deleteSubscriptionWT = async (data) => {
-
-  const queryParams = new URLSearchParams(data).toString();
   const response = await fetch(`${BACKEND_BASE_URL}/unsubscribe`, {
     method: 'DELETE',
     headers: {
@@ -171,9 +165,10 @@ export const fetchDistrictLocations = async (districtId) => {
   return adminRequest(`/admin/locations?${params.toString()}`, "GET");
 };
 
-export const fetchLocationNarrative = async (districtId, location) => {
+export const fetchLocationNarrative = async (districtId, category, location) => {
   const params = new URLSearchParams({
     district_id: districtId,
+    category,
     location,
   });
   return adminRequest(`/admin/narratives?${params.toString()}`, "GET");
@@ -182,9 +177,21 @@ export const fetchLocationNarrative = async (districtId, location) => {
 export const saveLocationNarrative = async (data) =>
   adminRequest("/admin/narratives", "PUT", data);
 
-export const uploadLocationNarrativeImage = async (districtId, location, file) => {
+export const generateLocationNarrative = async (data) =>
+  adminRequest("/admin/narratives/generate", "POST", data);
+
+export const generateAllMissingNarratives = async (data) =>
+  adminRequest("/admin/narratives/generate-all", "POST", data);
+
+export const uploadLocationNarrativeImage = async (
+  districtId,
+  category,
+  location,
+  file
+) => {
   const formData = new FormData();
   formData.append("district_id", districtId);
+  formData.append("category", category);
   formData.append("location", location);
   formData.append("image", file);
   const response = await fetch(`${BACKEND_BASE_URL}/admin/narratives/image`, {
