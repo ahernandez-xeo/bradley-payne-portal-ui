@@ -17,15 +17,16 @@
   align-items: center;
 }
 
+// Placeholders read as hints, not as entered values. This previously used
+// absolute positioning with a near-black colour, so every empty field looked
+// like it was already filled in.
 @mixin input-placeholder() {
   &::-webkit-input-placeholder,
   &::-moz-placeholder,
   &::-ms-input-placeholder,
   &::placeholder {
-    position: absolute;
-    margin-top: 18px;
-    color: $brand-black;
-    line-height:normal!important;
+    color: var(--text-muted);
+    opacity: 1;
   }
 }
 

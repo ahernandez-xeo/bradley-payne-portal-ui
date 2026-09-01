@@ -1,0 +1,211 @@
+@import "../../variables";
+
+// ── Skeleton ────────────────────────────────────────────────────────────────
+
+.skeleton {
+  display: inline-block;
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 25%,
+    var(--surface-border) 37%,
+    var(--surface-2) 63%
+  );
+  background-size: 400% 100%;
+  animation: skeletonShimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes skeletonShimmer {
+  from {
+    background-position: 100% 50%;
+  }
+  to {
+    background-position: 0 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
+// ── Empty state ─────────────────────────────────────────────────────────────
+
+.emptyState {
+  padding: var(--space-6) var(--space-5);
+  text-align: center;
+  border-radius: var(--radius-md);
+}
+
+.emptyStateError {
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+
+  .emptyTitle {
+    color: var(--danger-fg);
+  }
+}
+
+.emptyTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.emptyMessage {
+  margin-top: var(--space-2);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.emptyAction {
+  margin-top: var(--space-4);
+}
+
+// ── Confirm dialog ──────────────────────────────────────────────────────────
+
+.confirmOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2500;
+  background: rgba(12, 18, 28, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+  box-sizing: border-box;
+}
+
+.confirmDialog {
+  width: 100%;
+  max-width: 460px;
+  background: $surface-white;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-raised);
+  padding: var(--space-5);
+  text-align: left;
+  box-sizing: border-box;
+}
+
+.confirmTitle {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.confirmMessage {
+  margin: var(--space-3) 0 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-body);
+}
+
+.confirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.confirmCancel,
+.confirmPrimary,
+.confirmDestructive {
+  appearance: none;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 9px 18px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  &:focus-visible {
+    outline: 2px solid $accent-theme;
+    outline-offset: 2px;
+  }
+}
+
+.confirmCancel {
+  border: 1px solid var(--input-border);
+  background: $surface-white;
+  color: var(--text-body);
+
+  &:hover:not(:disabled) {
+    border-color: $accent-theme;
+    color: $accent-theme;
+  }
+}
+
+.confirmPrimary {
+  border: none;
+  background: $accent-theme;
+  color: $on-accent;
+
+  &:hover:not(:disabled) {
+    background: $accent-hover;
+  }
+}
+
+.confirmDestructive {
+  border: none;
+  background: var(--danger-fg);
+  color: #ffffff;
+
+  &:hover:not(:disabled) {
+    filter: brightness(0.92);
+  }
+
+  &:focus-visible {
+    outline-color: var(--danger-fg);
+  }
+}
+
+// ── Secret reveal (default passwords etc.) ──────────────────────────────────
+
+.secretRow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-top: var(--space-2);
+}
+
+.secretValue {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  padding: 3px 8px;
+  background: $surface-white;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-strong);
+  letter-spacing: 0.04em;
+}
+
+.secretBtn {
+  appearance: none;
+  border: 1px solid var(--input-border);
+  background: $surface-white;
+  color: var(--text-body);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+
+  &:hover {
+    border-color: $accent-theme;
+    color: $accent-theme;
+  }
+
+  &:focus-visible {
+    outline: 2px solid $accent-theme;
+    outline-offset: 1px;
+  }
+}

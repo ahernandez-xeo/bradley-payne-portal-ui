@@ -54,11 +54,21 @@ $nav-active-border: var(--client-accent);
 $nav-hover-bg: var(--surface-2);
 $nav-divider: var(--divider);
 
-$font-family-base: "Eurostile", "Eurostile Extended", "Microgramma D Extended", "Bank Gothic Medium", "Arial Narrow", Arial, sans-serif;
+// Eurostile when available (see _fonts.scss), then the bundled Saira, then the
+// platform UI face. Deliberately no condensed fallbacks — "Arial Narrow" used
+// to sit in this chain and was what most visitors actually rendered.
+$font-family-base: "Eurostile", "Saira", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 
 // —— Semantic theme tokens (light base) ——
+// Everything interactive routes through these so overriding --client-accent
+// re-themes buttons, focus rings and badges, not just the nav shell.
 $submit-color: var(--client-accent);
 $accent-theme: var(--client-accent);
+$accent-hover: var(--accent-strong);
+$accent-deep: var(--accent-deep);
+$accent-soft-bg: var(--accent-soft);
+$accent-ring: var(--accent-ring);
+$on-accent: var(--client-accent-contrast);
 $main-margin: 10px;
 $line-theme: $brand-black;
 $sky-theme: $brand-teal;

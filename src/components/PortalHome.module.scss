@@ -4,7 +4,7 @@ $header-yellow: var(--client-accent, #e6b422);
 
 .home {
   min-height: 100vh;
-  background-color: #eef1f4;
+  background-color: var(--app-bg);
 }
 
 .topBar {
@@ -14,7 +14,7 @@ $header-yellow: var(--client-accent, #e6b422);
   gap: 16px;
   padding: 14px 28px;
   background: $surface-white;
-  border-bottom: 1px solid #e3e7eb;
+  border-bottom: 1px solid var(--surface-border);
   box-sizing: border-box;
 }
 
@@ -31,7 +31,7 @@ $header-yellow: var(--client-accent, #e6b422);
   object-fit: contain;
   border-radius: 50%;
   background: $surface-white;
-  border: 1px solid #e3e7eb;
+  border: 1px solid var(--surface-border);
   flex-shrink: 0;
 }
 
@@ -69,10 +69,10 @@ $header-yellow: var(--client-accent, #e6b422);
 
   select {
     appearance: none;
-    border: 1px solid #d0d5da;
+    border: 1px solid var(--input-border);
     background: $surface-white;
     color: var(--text-body);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     padding: 8px 32px 8px 12px;
     font-size: 13px;
     font-weight: 600;
@@ -109,10 +109,10 @@ $header-yellow: var(--client-accent, #e6b422);
 .adminBtn,
 .logoutBtn {
   appearance: none;
-  border: 1px solid #d0d5da;
+  border: 1px solid var(--input-border);
   background: $surface-white;
   color: var(--text-body);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   padding: 8px 14px;
   font-size: 13px;
   font-weight: 600;
@@ -124,16 +124,21 @@ $header-yellow: var(--client-accent, #e6b422);
     border-color: $accent-theme;
     color: $accent-theme;
   }
+
+  &:focus-visible {
+    outline: 2px solid $accent-theme;
+    outline-offset: 2px;
+  }
 }
 
 .adminBtn {
-  border-color: $brand-teal;
-  color: $brand-teal;
+  border-color: $accent-theme;
+  color: $accent-theme;
 
   &:hover {
-    background: $brand-teal-12;
-    border-color: $brand-teal-hover;
-    color: $brand-teal-hover;
+    background: $accent-soft-bg;
+    border-color: $accent-hover;
+    color: $accent-hover;
   }
 }
 
@@ -207,19 +212,31 @@ $header-yellow: var(--client-accent, #e6b422);
 .card {
   position: relative;
   background: $surface-white;
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   padding: 28px 28px 24px;
-  box-shadow: 0 8px 24px rgba(30, 40, 55, 0.06);
-  border: 1px solid #e8ecf0;
+  box-shadow: var(--shadow-card);
+  border: 1px solid var(--surface-border);
   text-align: left;
   box-sizing: border-box;
   min-height: 210px;
   display: flex;
   flex-direction: column;
+  transition: box-shadow 0.18s, border-color 0.18s, transform 0.18s;
 }
 
 .cardActive {
-  cursor: default;
+  cursor: pointer;
+
+  &:hover {
+    box-shadow: var(--shadow-raised);
+    border-color: var(--accent-border);
+    transform: translateY(-2px);
+  }
+
+  &:focus-within {
+    border-color: $accent-theme;
+    box-shadow: 0 0 0 3px var(--accent-ring);
+  }
 }
 
 .cardSoon {
@@ -234,19 +251,33 @@ $header-yellow: var(--client-accent, #e6b422);
   font-weight: 700;
   letter-spacing: 0.8px;
   text-transform: uppercase;
-  color: #8b939c;
-  background: #f0f3f6;
+  color: var(--text-muted);
+  background: var(--surface-2);
   border-radius: 999px;
   padding: 4px 8px;
 }
 
 .cardIcon {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--card-accent) 18%, #ffffff);
-  border-left: 4px solid var(--card-accent);
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--card-accent) 14%, #ffffff);
+  color: var(--card-accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   margin-bottom: 16px;
+  flex-shrink: 0;
+
+  svg {
+    width: 22px;
+    height: 22px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
 }
 
 .cardTitle {
@@ -276,9 +307,15 @@ $header-yellow: var(--client-accent, #e6b422);
   color: var(--card-accent);
   cursor: pointer;
   align-self: flex-start;
+  border-radius: var(--radius-sm);
 
   &:hover {
     text-decoration: underline;
+  }
+
+  &:focus-visible {
+    outline: 2px solid $accent-theme;
+    outline-offset: 3px;
   }
 }
 
@@ -286,7 +323,7 @@ $header-yellow: var(--client-accent, #e6b422);
   margin-top: 18px;
   font-size: 14px;
   font-weight: 700;
-  color: #b0b7bf;
+  color: var(--text-muted);
 }
 
 @media (max-width: 800px) {

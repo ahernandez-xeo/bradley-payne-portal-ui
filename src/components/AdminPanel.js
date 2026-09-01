@@ -1,5 +1,3 @@
-import { useState } from "react";
-
 import classes from "./AdminPanel.module.scss";
 import UserAdmin from "./UserAdmin";
 import NarrativeMapping from "./NarrativeMapping";
@@ -9,9 +7,7 @@ const TABS = [
   { id: "narrative", label: "Narrative Mapping" },
 ];
 
-const AdminPanel = ({ onBack, onLogout }) => {
-  const [activeTab, setActiveTab] = useState("users");
-
+const AdminPanel = ({ activeTab = "users", onTabChange, onBack, onLogout }) => {
   return (
     <div className={classes.admin}>
       <header className={classes.topBar}>
@@ -38,7 +34,8 @@ const AdminPanel = ({ onBack, onLogout }) => {
               className={`${classes.tab} ${
                 activeTab === tab.id ? classes.tabActive : ""
               }`}
-              onClick={() => setActiveTab(tab.id)}
+              aria-current={activeTab === tab.id ? "page" : undefined}
+              onClick={() => onTabChange?.(tab.id)}
             >
               {tab.label}
             </button>

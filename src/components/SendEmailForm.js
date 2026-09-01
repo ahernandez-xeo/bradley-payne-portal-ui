@@ -1,9 +1,8 @@
 import { useRef, useEffect, useContext } from "react";
+import { Link } from "react-router-dom";
 
 import classes from "./LoginForm.module.scss";
 import ValidUserContext from "../authCheck";
-import usernameIcon from "../assets/fa-user.svg";
-
 
 let isInitial = true;
 
@@ -11,8 +10,6 @@ function SendEmailForm() {
   const validUserContext = useContext(ValidUserContext);
 
   const emailInputRef = useRef();
-  const passwordInputRef = useRef();
-  const passwordConfirmInputRef = useRef();
 
   useEffect(() => {
     if (isInitial) {
@@ -23,15 +20,21 @@ function SendEmailForm() {
 
   const submitHandler = (event) => {
     event.preventDefault();
-    validUserContext.apiSendPwdResetHandler(
-        emailInputRef.current.value
-    );
+    if (validUserContext.isLoggingIn) {
+      return;
+    }
+    validUserContext.apiSendPwdResetHandler(emailInputRef.current.value);
   };
+
+  const submitDisabled =
+    validUserContext.isLoggedIn || validUserContext.isLoggingIn;
 
   return (
     <form onSubmit={submitHandler} className={classes.form}>
-    <div className={classes.loginInstructions}>Please enter your email address to reset your passsword</div>
-     <div>
+      <div className={classes.loginInstructions}>
+        Please enter your email address to reset your password
+      </div>
+      <div>
         <input
           className={classes.input}
           type="email"
@@ -41,14 +44,20 @@ function SendEmailForm() {
           placeholder="E-mail"
           ref={emailInputRef}
           required={!validUserContext.isLoggedIn}
-        ></input>
+        />
       </div>
-      <button
-        className={classes.loginBtn}
-        disabled={validUserContext.isLoggedIn}
-      >
-        {validUserContext.isLoggedIn ? "Already logged in" : "Send Email"}
+      <button className={classes.loginBtn} disabled={submitDisabled}>
+        {validUserContext.isLoggedIn
+          ? "Already logged in"
+          : validUserContext.isLoggingIn
+          ? "Sending…"
+          : "Send Email"}
       </button>
+      <div className={classes.loginOptions}>
+        <Link className={classes.forgot} to="/login">
+          Back to sign in
+        </Link>
+      </div>
     </form>
   );
 }

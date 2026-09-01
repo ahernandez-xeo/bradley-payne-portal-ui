@@ -7,7 +7,7 @@
   gap: 14px;
   background-color: $surface-white;
   border: 1px solid $brand-cool-gray;
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 4px 16px rgba(6, 8, 8, 0.06);
   padding: 20px 24px;
   overflow: auto;
@@ -37,20 +37,20 @@
 .notice {
   font-size: 13px;
   padding: 10px 14px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   border: 1px solid transparent;
 }
 
 .error {
-  color: #8a2216;
-  background-color: #fdecea;
-  border-color: #f5c6c0;
+  color: var(--danger-fg);
+  background-color: var(--danger-bg);
+  border-color: var(--danger-border);
 }
 
 .notice {
-  color: $brand-teal-deep;
-  background-color: $brand-teal-12;
-  border-color: rgba(0, 110, 99, 0.2);
+  color: var(--success-fg);
+  background-color: var(--success-bg);
+  border-color: var(--success-border);
 }
 
 .section {
@@ -103,7 +103,7 @@
   width: 100%;
   padding: 16px;
   border: 1px solid $brand-cool-gray;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: $brand-cloud;
   box-sizing: border-box;
 }
@@ -178,13 +178,13 @@
   color: $brand-black;
   padding: 9px 12px;
   border: 1px solid $brand-cool-gray;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background-color: $surface-white;
   resize: vertical;
   min-height: 100px;
 
-  &:focus {
-    outline: 2px solid $brand-teal-18;
+  &:focus-visible {
+    outline: 2px solid $accent-theme;
     outline-offset: 1px;
   }
 }
@@ -205,21 +205,38 @@
   }
 
   select,
-  input[type="text"] {
+  input[type="text"],
+  input[type="search"] {
     font-family: inherit;
     font-size: 14px;
     font-weight: 400;
     color: $brand-black;
     padding: 9px 12px;
     border: 1px solid $brand-cool-gray;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     background-color: $surface-white;
 
-    &:focus {
-      outline: 2px solid $brand-teal-18;
+    &:focus-visible {
+      outline: 2px solid $accent-theme;
       outline-offset: 1px;
     }
   }
+}
+
+.locationFilter {
+  margin-bottom: var(--space-2);
+}
+
+.dirtyHint {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--danger-fg);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  border-radius: 999px;
+  padding: 4px 10px;
 }
 
 .statusRow {
@@ -234,9 +251,9 @@
   align-items: center;
   font-size: 12px;
   font-weight: 700;
-  color: #8a2216;
-  background: #fdecea;
-  border: 1px solid #f5c6c0;
+  color: var(--danger-fg);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
   border-radius: 999px;
   padding: 4px 10px;
 }
@@ -260,15 +277,15 @@
 }
 
 .fieldBadgeMissing {
-  color: #8a2216;
-  background: #fdecea;
-  border: 1px solid #f5c6c0;
+  color: var(--danger-fg);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
 }
 
 .fieldBadgeReady {
-  color: $brand-teal-deep;
-  background: $brand-teal-12;
-  border: 1px solid rgba(0, 110, 99, 0.2);
+  color: var(--success-fg);
+  background: var(--success-bg);
+  border: 1px solid var(--success-border);
 }
 
 .hint {
@@ -299,7 +316,7 @@
     height: 40px;
     padding: 2px;
     border: 1px solid $brand-cool-gray;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     background: $surface-white;
     cursor: pointer;
   }
@@ -312,7 +329,7 @@
 
 .previewSwatch {
   min-height: 72px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   border: 1px solid rgba(0, 0, 0, 0.08);
   display: flex;
   align-items: flex-end;
@@ -343,7 +360,7 @@
   font-size: 14px;
   font-weight: 600;
   padding: 9px 16px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
 
   input {
@@ -359,7 +376,7 @@
   width: 100%;
   min-height: 120px;
   border: 1px dashed $brand-cool-gray;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: $brand-cloud;
   display: flex;
   align-items: center;
@@ -376,7 +393,7 @@
 }
 
 .logoPreviewMissing {
-  border-color: #f5c6c0;
+  border-color: var(--danger-border);
   background: #fff7f6;
 }
 
@@ -402,13 +419,13 @@
 
 .primaryBtn {
   border: none;
-  background-color: $brand-teal;
-  color: #ffffff;
+  background-color: $accent-theme;
+  color: $on-accent;
   font-family: inherit;
   font-size: 14px;
   font-weight: 600;
   padding: 9px 18px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
 
   &:disabled {
@@ -417,7 +434,7 @@
   }
 
   &:hover:not(:disabled) {
-    background-color: $brand-teal-hover;
+    background-color: $accent-hover;
   }
 }
 
@@ -429,7 +446,7 @@
   font-size: 14px;
   font-weight: 600;
   padding: 8px 18px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
 
   &:disabled {

@@ -16,24 +16,53 @@
   --accent-soft: color-mix(in srgb, var(--client-accent) 12%, #ffffff);
   --accent-softer: color-mix(in srgb, var(--client-accent) 6%, #ffffff);
   --accent-border: color-mix(in srgb, var(--client-accent) 38%, #ffffff);
+  // Focus ring / soft text-on-light shades, also accent-derived so a client
+  // override re-themes buttons and focus states, not just the nav chrome.
+  --accent-ring: color-mix(in srgb, var(--client-accent) 24%, transparent);
+  --accent-deep: color-mix(in srgb, var(--client-accent) 70%, #000000);
 
   // Fixed light base surfaces (shared across all clients)
   --app-bg: #eef1f4;
   --surface: #ffffff;
   --surface-2: #f6f8f9;
   --surface-border: #e3e7eb;
+  // Slightly stronger than the card edge — used for inputs, selects, buttons.
+  --input-border: #d0d5da;
   --divider: #eef1f3;
 
   // Text
   --text-strong: #2a3037;
   --text-body: #4c545d;
   --text-muted: #8b939c;
+
+  // Radii — everything should land on one of these three
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  // Spacing scale
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  // Elevation
+  --shadow-card: 0 1px 3px rgba(42, 48, 55, 0.08);
+  --shadow-raised: 0 12px 40px rgba(42, 48, 55, 0.1);
+
+  // Status
+  --danger-fg: #8a2216;
+  --danger-bg: #fdecea;
+  --danger-border: #f5c6c0;
+  --success-fg: #1a6b3c;
+  --success-bg: #e8f5ee;
+  --success-border: #b8dfc8;
 }
 
 * {
   color: var(--text-body);
-  scrollbar-width: none;
-  -ms-overflow-style: none;
 }
 
 body {
@@ -72,8 +101,29 @@ button {
   line-height: normal;
 }
 
+// Thin but visible scrollbars. These used to be hidden outright, which removed
+// the only cue that the sidebar and admin tables scroll.
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-border) transparent;
+}
+
 ::-webkit-scrollbar {
-  width: 0px;
-  height: 0px;
-  display: none;
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--surface-border);
+  border: 3px solid transparent;
+  border-radius: 10px;
+  background-clip: content-box;
+
+  &:hover {
+    background-color: var(--text-muted);
+  }
 }

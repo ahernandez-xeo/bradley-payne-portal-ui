@@ -1,5 +1,6 @@
 import Layout from "./components/Layout";
-import { useEffect, useRef, useContext, useState } from "react";
+import { useContext, useState } from "react";
+import { Route, Routes } from "react-router-dom";
 import classes from "./App.module.scss";
 import oarLogo from "./assets/oar-logo-transparent-replit.png";
 import LoginForm from "./components/LoginForm";
@@ -13,60 +14,35 @@ import UnsubscribeForm from "./components/UnsubscribeForm";
 
 import LoginHead from "./components/LoginHead";
 import Landing from "./components/Landing";
+import SessionExpiryWarning from "./components/SessionExpiryWarning";
 import ValidUserContext from "./authCheck";
-import { useThirdPartyCookieCheck } from './useThirdPartyCookieCheck';
-import { IdleTimerProvider, useIdleTimer, useIdleTimerContext } from 'react-idle-timer';
+import { useIdleTimer } from 'react-idle-timer';
 
 function App() {
-  //const idleTimer = useIdleTimerContext()
   const validUserContext = useContext(ValidUserContext);
   const cookiesEnabled = true;
-  const [isIdle, setIsIdle] = useState(false);
   const [idleCount, setIdleCount] = useState(0);
 
-  const elementRef = useRef();
-
-
   const onPresenceChange = (presence) => {
-    // Handle state changes in one function
-    if (validUserContext.isLoggedIn && presence.type == 'idle') {
+    if (validUserContext.isLoggedIn && presence.type === 'idle') {
       idleTimer.reset()
-      var newIdleCount = idleCount + 1;
-      setIdleCount(newIdleCount)
+      setIdleCount((count) => count + 1)
     }
-    console.log("Idle type: "+presence.type)
   }
 
   const onActive = () => {
-    console.log("Active handler: "+ Date.now())
     validUserContext.localAuthCheck(true)
   }
 
-  const idleTimer = useIdleTimer({ onPresenceChange,  timeout: 5*60 * 1000})
-  const idleTimerNoReset = useIdleTimer({ onActive,  timeout: 5*60 * 1000})
-
-  const handleOnIdle = () => {
-    setIsIdle(true);
-    validUserContext.localAuthCheck(true)
-    elementRef.current.idleTimer.activate()
-    // You can also log the user out or perform other actions here
-  };
-
-  const handleOnActive = () => {
-    setIsIdle(false);
-  };
-
-  const handleOnAction = () => {
-    setIsIdle(false);
-  };
+  const idleTimer = useIdleTimer({ onPresenceChange, timeout: 5 * 60 * 1000 })
+  useIdleTimer({ onActive, timeout: 5 * 60 * 1000 })
 
   if (validUserContext.isLoggedIn) {
     return (
       <div className={classes.container}>
-        {/* Always render the Landing component */}
         <Landing idleCountParam={idleCount} />
+        <SessionExpiryWarning />
 
-        {/* Display the curtain if the user is logging in */}
         {validUserContext.isLoggingIn && (
           <div className={classes.spinnerOverlay}>
             <div className={classes.spinner}></div>
@@ -76,38 +52,53 @@ function App() {
     );
   }
 
-  var form
-  if (!cookiesEnabled){
-    form = <ErrorPage />
+  if (!cookiesEnabled) {
+    return <AuthShell isLoggingIn={validUserContext.isLoggingIn}><ErrorPage /></AuthShell>;
   }
-  else if(validUserContext.pwdResetTokenValue) {
-    form = <ResetForm />
+
+  // Token-bearing links win over everything else — they are one-shot entry
+  // points and the token lives in the query string.
+  let tokenForm = null;
+  if (validUserContext.pwdResetTokenValue) {
+    tokenForm = <ResetForm />;
   } else if (validUserContext.newUserTokenValue) {
-    form = <NewUserForm />
-  } else if (validUserContext.isForgotPwd) {
-    form = <SendEmailForm />
+    tokenForm = <NewUserForm />;
   } else if (validUserContext.unSubscribeUserValue) {
-    form = <UnsubscribeForm />
-  } else {
-    form = <LoginForm />
+    tokenForm = <UnsubscribeForm />;
+  }
+
+  if (tokenForm) {
+    return (
+      <AuthShell isLoggingIn={validUserContext.isLoggingIn}>{tokenForm}</AuthShell>
+    );
   }
 
   return (
-    <Layout>
-      {validUserContext.isLoggingIn? 
-        ( <div className={classes.spinnerContainer}>
-            <div className={classes.spinner}></div>
-          </div>
-        ):(
-          <div></div>
-        )
-      }
-      <LoginHead />
-      {form}
-      <div className={classes.poweredBy}>Powered by</div>
-      <img className={classes.loginFooterLogo} src={oarLogo} alt="OAR — Forward Together" />
-    </Layout>
+    <AuthShell isLoggingIn={validUserContext.isLoggingIn}>
+      <Routes>
+        <Route path="/forgot-password" element={<SendEmailForm />} />
+        <Route path="/login" element={<LoginForm />} />
+        {/* Any other deep link falls back to sign-in; Landing restores the
+            intended view once the session is established. */}
+        <Route path="*" element={<LoginForm />} />
+      </Routes>
+    </AuthShell>
   );
 }
+
+/** Shared chrome for every unauthenticated screen. */
+const AuthShell = ({ isLoggingIn, children }) => (
+  <Layout>
+    {isLoggingIn && (
+      <div className={classes.spinnerContainer}>
+        <div className={classes.spinner}></div>
+      </div>
+    )}
+    <LoginHead />
+    {children}
+    <div className={classes.poweredBy}>Powered by</div>
+    <img className={classes.loginFooterLogo} src={oarLogo} alt="OAR — Forward Together" />
+  </Layout>
+);
 
 export default App;

@@ -1,6 +1,16 @@
-// Eurostile: uses locally installed fonts when available.
-// To bundle web fonts, add Eurostile-Regular.woff2 and Eurostile-Bold.woff2 to src/assets/fonts/
-// and uncomment the url() lines below.
+// —— Brand typography ————————————————————————————————————————————————
+//
+// Eurostile is the brand face but it is a licensed Monotype family, so it is
+// not bundled here. The rules below use it when it is installed locally, and
+// will pick up self-hosted files as soon as Eurostile-Regular.woff2 /
+// Eurostile-Bold.woff2 are dropped into ./assets/fonts/ and the url() lines
+// are uncommented.
+//
+// Saira is bundled as the fallback: it is OFL licensed, freely embeddable, and
+// shares Eurostile's squarish, slightly extended letterforms. Without it the
+// stack previously fell through to Arial Narrow, which rendered the whole
+// portal in a condensed face for anyone who did not own Eurostile.
+
 @font-face {
   font-family: "Eurostile";
   src:
@@ -18,6 +28,30 @@
     local("Eurostile Bold"),
     local("Eurostile-Bold");
     // url("./assets/fonts/Eurostile-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Saira";
+  src: url("./assets/fonts/Saira-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Saira";
+  src: url("./assets/fonts/Saira-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Saira";
+  src: url("./assets/fonts/Saira-Bold.woff2") format("woff2");
   font-weight: 700;
   font-style: normal;
   font-display: swap;

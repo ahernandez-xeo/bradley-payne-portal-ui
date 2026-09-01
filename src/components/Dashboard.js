@@ -1,207 +1,193 @@
 import classes from "./Landing.module.scss";
-import {useRef, useEffect, useState, useContext} from "react";
+import { useRef, useEffect, useState, useContext } from "react";
 import ValidUserContext from "../authCheck";
-import { chartPalette } from "../themeColors";
-import dividerIcon from "../assets/akar-icons_divider.svg";
-import classesSpin from "../App.module.scss";
+import { useToast } from "./Toast/ToastProvider";
 
+/** How long to wait for `firstinteractive` before telling the user. */
+const VIZ_LOAD_TIMEOUT = 25000;
 
+const Dashboard = ({
+  dashboardLinkProp,
+  initialFilters,
+  initialParameters,
+  onDashboardReady,
+}) => {
+  const [dashboardLink, setDashboardLink] = useState(dashboardLinkProp);
+  const [loaded, setLoaded] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const elementRef = useRef();
+  const linkRef = useRef(dashboardLink);
+  const onDashboardReadyRef = useRef(onDashboardReady);
 
-const Dashboard = ({dashboardLinkProp, displayTabs, onDashboardReady}) => {
-    const [activeTab, setActiveTab] = useState(0);
-    const [loaded, setLoaded] = useState(false);
+  // Tableau reads <viz-filter> and <viz-parameter> children once, when the
+  // element initializes, so these are frozen at mount.
+  const initialFiltersRef = useRef(initialFilters || []);
+  const initialParametersRef = useRef(initialParameters || []);
 
-    const [dashboardLink, setDashboardLink] = useState(dashboardLinkProp)
-    const [tabArray, setTabArray] = useState([
-    ]);
-    const [tabLinksArray, setTabLinksArray] = useState([
-    ]);
-    const elementRef = useRef();
-    const linkRef = useRef(dashboardLink);
-    const onDashboardReadyRef = useRef(onDashboardReady);
+  const validUserContext = useContext(ValidUserContext);
+  const { showToast } = useToast();
 
-    const validUserContext = useContext(ValidUserContext);
-    console.log("prop: "+dashboardLink);
+  useEffect(() => {
+    onDashboardReadyRef.current = onDashboardReady;
+  }, [onDashboardReady]);
 
-    useEffect(() => {
-      onDashboardReadyRef.current = onDashboardReady;
-    }, [onDashboardReady]);
+  const buildDashboardUrl = (link) =>
+    "https://us-east-1.online.tableau.com/#/site/bradleypayneplatform/views/" +
+    (link || "").replace("/sheets", "") +
+    "?:showVizHome=no&:embed=true&:toolbar=no&:tabs=n&refresh=yes";
 
-    const isMobileDevice = () => {
-      return /Mobi|Android/i.test(navigator.userAgent);
-    };
+  useEffect(() => {
+    setDashboardLink(dashboardLinkProp);
+    linkRef.current = dashboardLinkProp;
+    setLoaded(false);
+    setLoadFailed(false);
 
-    const buildDashboardUrl = (link) =>
-      "https://us-east-1.online.tableau.com/#/site/bradleypayneplatform/views/" +
-      (link || "").replace("/sheets", "") +
-      "?:showVizHome=no&:embed=true&:toolbar=no&:tabs=n&refresh=yes";
-
-    useEffect(() => {
-      setDashboardLink(dashboardLinkProp);
-      linkRef.current = dashboardLinkProp;
-      setLoaded(false);
-      console.log("Reading localstorage");
-      const items = JSON.parse(localStorage.getItem("tabs"));
-      if (items) {
-        setTabArray(["Loading"]);
+    // Keep the same <tableau-viz> instance (JWT is one-time redeemable).
+    // Explicitly update src so sheet switches re-fire firstinteractive.
+    const viz = elementRef.current;
+    if (viz && dashboardLinkProp) {
+      const nextSrc = buildDashboardUrl(dashboardLinkProp);
+      if (viz.src !== nextSrc) {
+        // Mark session still active during in-place sheet switches so the
+        // idle logout timer does not fire mid-navigation.
+        localStorage.setItem("tableauActive", true);
+        viz.src = nextSrc;
       }
-
-      // Keep the same <tableau-viz> instance (JWT is one-time redeemable).
-      // Explicitly update src so sheet switches re-fire firstinteractive.
-      const viz = elementRef.current;
-      if (viz && dashboardLinkProp) {
-        const nextSrc = buildDashboardUrl(dashboardLinkProp);
-        if (viz.src !== nextSrc) {
-          // Mark session still active during in-place sheet switches so the
-          // idle logout timer does not fire mid-navigation.
-          localStorage.setItem("tableauActive", true);
-          viz.src = nextSrc;
-        }
-      }
-
-      const timeoutId = setTimeout(() => {
-        var tableauActive = JSON.parse(localStorage.getItem("tableauActive"));
-        if (tableauActive) {
-          console.log("Tableau session active");
-        } else {
-          console.log("Tableau session inactive");
-          validUserContext.logoutUser();
-        }
-      }, 30000);
-
-      return () => clearTimeout(timeoutId);
-    }, [dashboardLinkProp]);
-
-    useEffect(() => {
-        const viz = elementRef.current;
-        if (!viz) {
-          return;
-        }
-
-        const handleFirstInteractive = async () => {
-            console.log(`Dashboard Loaded`);
-            console.log("effect: "+linkRef.current)
-            var sheets = viz.workbook.publishedSheetsInfo;
-            var newArray = sheets.map(sheet => {
-                if (isMobileDevice()) {
-                  return sheet.index +1
-                }
-                return sheet.name
-            }) 
-
-            var newLinksArray = sheets.map(sheet => {
-              return sheet.name
-          }) 
-
-            localStorage.setItem("tabs", JSON.stringify(newArray));
-            localStorage.setItem("tableauActive", true);
-            var activeTabIndex = sheets.findIndex(sheet => sheet.url.includes(linkRef.current.replace("sheets/", "")))
-
-            setTabArray(newArray);
-            setTabLinksArray(newLinksArray);
-
-            setLoaded(true);
-            setActiveTab(activeTabIndex);
-            try {
-              await viz.refreshDataAsync();
-            } catch (error) {
-              console.error("Error refreshing viz on load:", error);
-            }
-            if (onDashboardReadyRef.current) {
-              onDashboardReadyRef.current(viz);
-            }
-        };
-
-        console.log(`Listener added`);
-        viz.addEventListener("firstinteractive", handleFirstInteractive);
-
-        return () => {
-          viz.removeEventListener("firstinteractive", handleFirstInteractive);
-        };
-      }, []);
-
-
-    const handleTabClick = (tabIndex) => {
-        validUserContext.localAuthCheck(false);
-        elementRef.current.workbook.activateSheetAsync(tabLinksArray[tabIndex])
-        setActiveTab(tabIndex);
-    };
-
-    const renderTabs = () => {
-
-      const colors = chartPalette;
-  
-      return tabArray.map((tab, index) => {
-        if (activeTab === index) {
-            return (
-                <span
-                  key={index}
-                  className={`${classes.tab}  ${classes.active}`}
-                  style={{backgroundColor: '$line-theme'}}
-                  onClick={() => handleTabClick(index)}
-                >
-                  {tab}
-                </span>
-            )
-        } else {
-            return (
-                <span
-                  key={index}
-                  className={`${classes.tab}`}
-                  style={{backgroundColor: '$line-theme'}}
-                  onClick={() => handleTabClick(index)}
-                >
-                  {tab}
-                </span>
-            )
-        }
-      });
-    };
-
-    const handleTableauLoad = () => {
-      validUserContext.localAuthCheck(false);
-    };
-    
-
-    var jwtToken = JSON.parse(localStorage.getItem("tableau-login-data"));
-    localStorage.setItem("tableau-login-data", JSON.stringify("redeemed"));
-
-    var inputProps = {
-    };
-    
-    if (jwtToken != "redeemed") {
-      inputProps.token = jwtToken;
     }
-    const dashboardURL = buildDashboardUrl(dashboardLink);
 
-    console.log("Loading dashboard.");
+    const timeoutId = setTimeout(() => {
+      var tableauActive = JSON.parse(localStorage.getItem("tableauActive"));
+      if (!tableauActive) {
+        validUserContext.logoutUser();
+      }
+    }, 30000);
 
-    return (
-        <div>
-            {displayTabs? 
-              (
-                <div className={`${classes.tabbar}`}>
-                  <span className={`${classes.tabs}`}>{renderTabs()}</span>
-                </div>
-              ):(
-                <div></div>
-              )
-            }
-            <tableau-viz class={`${classes.tabframe}`}  onLoad={() => handleTableauLoad()} ref={elementRef} id="tableauViz" refresh="yes" width="100%" height="100%" hide-tabs='true' toolbar='hidden'
-                    src={dashboardURL} {...inputProps}
-                   >
-                  <custom-parameter name=":refresh" value="yes"></custom-parameter>
-            </tableau-viz>
-            {true == false  ? 
-            ( <div className={classes.loadingSpinnerContainer}>
-                <div className={classes.loadingSpinner}></div>
-              </div>
-            ):(
-              <div></div>
-            )
-          }
-        </div>
-    );
+    return () => clearTimeout(timeoutId);
+    // Keyed on the sheet link only: re-running whenever the auth context
+    // changes identity would restart the inactivity timeout.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dashboardLinkProp]);
+
+  useEffect(() => {
+    const viz = elementRef.current;
+    if (!viz) {
+      return;
+    }
+
+    const handleFirstInteractive = async () => {
+      localStorage.setItem("tableauActive", true);
+      setLoaded(true);
+      setLoadFailed(false);
+      try {
+        await viz.refreshDataAsync();
+      } catch (error) {
+        console.error("Error refreshing viz on load:", error);
+      }
+      if (onDashboardReadyRef.current) {
+        onDashboardReadyRef.current(viz);
+      }
+    };
+
+    const handleVizError = (event) => {
+      console.error("Tableau viz error:", event?.detail || event);
+      setLoadFailed(true);
+      showToast(
+        "The capital plan dashboard could not be loaded. Reload the portal, and contact support if it keeps failing.",
+        { variant: "error", title: "Dashboard unavailable" }
+      );
+    };
+
+    viz.addEventListener("firstinteractive", handleFirstInteractive);
+    viz.addEventListener("vizloaderror", handleVizError);
+
+    return () => {
+      viz.removeEventListener("firstinteractive", handleFirstInteractive);
+      viz.removeEventListener("vizloaderror", handleVizError);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Surface a stall even when Tableau never fires an error event.
+  useEffect(() => {
+    if (loaded || loadFailed) {
+      return undefined;
+    }
+    const timeoutId = setTimeout(() => {
+      setLoadFailed(true);
+      showToast(
+        "The capital plan dashboard is taking longer than expected to load. Reload the portal to try again.",
+        { variant: "error", title: "Dashboard is not responding" }
+      );
+    }, VIZ_LOAD_TIMEOUT);
+    return () => clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, loadFailed, dashboardLink]);
+
+  const handleTableauLoad = () => {
+    validUserContext.localAuthCheck(false);
   };
-  
-  export default Dashboard;
+
+  var jwtToken = JSON.parse(localStorage.getItem("tableau-login-data"));
+  localStorage.setItem("tableau-login-data", JSON.stringify("redeemed"));
+
+  var inputProps = {};
+
+  if (jwtToken !== "redeemed") {
+    inputProps.token = jwtToken;
+  }
+  const dashboardURL = buildDashboardUrl(dashboardLink);
+
+  return (
+    <div className={classes.dashboardContainer}>
+      <tableau-viz
+        class={`${classes.tabframe}`}
+        onLoad={() => handleTableauLoad()}
+        ref={elementRef}
+        id="tableauViz"
+        refresh="yes"
+        width="100%"
+        height="100%"
+        hide-tabs="true"
+        toolbar="hidden"
+        src={dashboardURL}
+        {...inputProps}
+      >
+        {initialFiltersRef.current.map(({ field, value }) => (
+          <viz-filter key={field} field={field} value={value}></viz-filter>
+        ))}
+        {initialParametersRef.current.map(({ name, value }) => (
+          <viz-parameter key={name} name={name} value={value}></viz-parameter>
+        ))}
+        <custom-parameter name=":refresh" value="yes"></custom-parameter>
+      </tableau-viz>
+      {!loaded && (
+        <div className={classes.vizOverlay} aria-live="polite">
+          <div className={classes.vizOverlayCard}>
+            {loadFailed ? (
+              <>
+                <div className={classes.vizOverlayTitle}>Dashboard unavailable</div>
+                <div className={classes.vizOverlayText}>
+                  The capital plan could not be loaded. Reload the portal to try again.
+                </div>
+                <button
+                  type="button"
+                  className={classes.vizOverlayBtn}
+                  onClick={() => window.location.reload()}
+                >
+                  Reload portal
+                </button>
+              </>
+            ) : (
+              <>
+                <div className={classes.filterLoadingSpinner} />
+                <div className={classes.vizOverlayText}>Loading capital plan…</div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Dashboard;

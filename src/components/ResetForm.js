@@ -1,8 +1,6 @@
 import { useState, useRef, useEffect, useContext } from "react";
 
 import classes from "./LoginForm.module.scss";
-import usernameIcon from "../assets/fa-user.svg";
-import passwordIcon from "../assets/carbon_password.svg";
 import alertIcon from "../assets/akar-icons_alert.svg";
 
 import ValidUserContext from "../authCheck";
@@ -13,7 +11,6 @@ let isInitial = true;
 function ResetForm() {
   const validUserContext = useContext(ValidUserContext);
 
-  const emailInputRef = useRef();
   const passwordInputRef = useRef();
   const passwordConfirmInputRef = useRef();
 
@@ -50,7 +47,7 @@ function ResetForm() {
 
   const submitHandler = (event) => {
     event.preventDefault();
-    if (passwordInputRef.current.value != passwordConfirmInputRef.current.value) {
+    if (passwordInputRef.current.value !== passwordConfirmInputRef.current.value) {
         openModal('Passwords do not match');
     } else if (!validatePassword(passwordInputRef.current.value)) {
         openModal('Password needs to be at least 8 characters with one uppercase, one lowercase, one digit and one special character');

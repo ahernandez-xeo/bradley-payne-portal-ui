@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import classes from "./ProjectTimeline.module.scss";
 import { fetchTimeline } from "./ApiService";
+import { Skeleton } from "./ui/Skeleton";
+import EmptyState from "./ui/EmptyState";
 
 const formatMoney = (amount) => {
   const value = Number(amount) || 0;
@@ -62,7 +64,30 @@ const ProjectTimeline = ({ clientKey }) => {
   if (loading) {
     return (
       <div className={classes.wrap}>
-        <div className={classes.stateCard}>Loading project timeline…</div>
+        <div className={classes.headerRow}>
+          <div className={classes.skeletonHeader}>
+            <Skeleton width="240px" height={26} />
+            <Skeleton width="320px" height={14} />
+          </div>
+          <Skeleton width="160px" height={48} radius="var(--radius-md)" />
+        </div>
+        <div className={classes.timeline}>
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div className={classes.yearRow} key={index}>
+              <div className={classes.rail}>
+                <Skeleton width="48px" height={48} radius="50%" />
+              </div>
+              <div className={classes.card}>
+                <Skeleton width="60%" height={18} />
+                <div className={classes.skeletonLines}>
+                  <Skeleton width="90%" height={12} />
+                  <Skeleton width="80%" height={12} />
+                  <Skeleton width="85%" height={12} />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -70,14 +95,15 @@ const ProjectTimeline = ({ clientKey }) => {
   if (error) {
     return (
       <div className={classes.wrap}>
-        <div className={classes.stateCard}>
-          <div className={classes.stateTitle}>Timeline unavailable</div>
-          <div className={classes.stateCopy}>
-            {error.includes("404")
-              ? "No generated timeline was found for this district yet. Run POST /timeline/generate after the capital plan CSV is loaded."
-              : error}
-          </div>
-        </div>
+        <EmptyState
+          variant="error"
+          title="Timeline unavailable"
+          message={
+            error.includes("404")
+              ? "No project timeline has been generated for this district yet. Once the capital plan data is loaded, the timeline will appear here."
+              : error
+          }
+        />
       </div>
     );
   }
@@ -87,6 +113,17 @@ const ProjectTimeline = ({ clientKey }) => {
   const title = timeline.title || "Project Timeline";
   const subtitle =
     timeline.subtitle || "Year-by-year narrative of the Capital Plan";
+
+  if (years.length === 0) {
+    return (
+      <div className={classes.wrap}>
+        <EmptyState
+          title="No timeline years yet"
+          message="The timeline for this district has been created but does not contain any years. Check that the capital plan data covers the current planning window."
+        />
+      </div>
+    );
+  }
 
   return (
     <div className={classes.wrap}>

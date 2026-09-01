@@ -7,7 +7,7 @@ $marker-dark: #1f2a37;
   padding: 28px 32px 48px;
   box-sizing: border-box;
   min-height: 100%;
-  background: #eef1f4;
+  background: var(--app-bg);
 }
 
 .headerRow {
@@ -34,6 +34,19 @@ $marker-dark: #1f2a37;
 .totalBlock {
   text-align: right;
   flex-shrink: 0;
+}
+
+.skeletonHeader {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.skeletonLines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
 }
 
 .totalLabel {
@@ -119,8 +132,8 @@ $marker-dark: #1f2a37;
 
 .card {
   background: $surface-white;
-  border: 1px solid #e3e7eb;
-  border-radius: 14px;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-lg);
   padding: 18px 22px 16px;
   box-shadow: 0 6px 18px rgba(30, 40, 55, 0.05);
 }
@@ -162,8 +175,8 @@ $marker-dark: #1f2a37;
 
 .stateCard {
   background: $surface-white;
-  border: 1px solid #e3e7eb;
-  border-radius: 12px;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
   padding: 28px;
   max-width: 560px;
   color: var(--text-body);

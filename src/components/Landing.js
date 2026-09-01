@@ -1,7 +1,6 @@
 import classes from "./Landing.module.scss";
 import { useRef, useEffect, useState, useContext } from "react";
 import ValidUserContext from "../authCheck";
-import menuIcon from "../assets/fa-menu.svg";
 import { useSwipeable } from "react-swipeable";
 import Dashboard from "./Dashboard";
 import oarLogo from "../assets/oar-logo-transparent-replit.png";
@@ -12,252 +11,45 @@ import heroFallback from "../assets/portal-hero.webp";
 import {
   fetchAdminDistricts,
   fetchDistrictBranding,
-  fetchDashboardFilters,
   impersonateDistrict,
 } from "./ApiService";
+import {
+  CAPITAL_PLAN_WORKBOOK,
+  DEFAULT_BRAND_COLOR,
+  DEFAULT_LOGO_URL,
+  taglineFor,
+} from "../portalConfig";
+import { useToast } from "./Toast/ToastProvider";
+
+import {
+  buildFiltersFromRows,
+  DEPARTMENT_FILTER_ALIASES,
+  FILTER_ORDER,
+  getDepartmentValues,
+  hasLocationSelection,
+  locationSelectedParameter,
+  orderTopFilters,
+  resolveCapitalPlanSheetMap,
+  resolveEntryRestore,
+  selectionParametersForRole,
+  TOP_FILTER_ORDER,
+} from "../utils/tableauFilters";
+import { useIsCompactLayout, useIsTouchDevice } from "../hooks/useMediaQuery";
+import { Navigate } from "react-router-dom";
+import { usePortalRoute, ROUTES } from "../hooks/usePortalRoute";
+import { useDashboardFilters } from "../hooks/useDashboardFilters";
+import { useTableauViz } from "../hooks/useTableauViz";
+import AppTopBar from "./shell/AppTopBar";
+import SidebarNav from "./shell/SidebarNav";
+import ContextFilterBar from "./shell/ContextFilterBar";
+import DistrictSelect from "./shell/DistrictSelect";
 
 const SITE_ADMIN_ROLE = "SiteAdministratorCreator";
-const DEFAULT_BRAND_COLOR = "#e6b422";
-const DEFAULT_LOGO_URL =
-  "https://storage.googleapis.com/bp_portal_artifacts/bradleypayne.png";
-
-const isMobileDevice = () => /Mobi|Android/i.test(navigator.userAgent);
-
-const FILTER_ORDER = ["Category", "Location Type", "LOCATION"];
-const TOP_FILTER_ORDER = ["Location Type", "LOCATION"];
-const CATEGORY_FILTER = "Category";
-/** Exact Tableau caption — Embedding API field names are case-sensitive. */
-const LOCATION_FILTER = "LOCATION";
-/** Tableau may expose the department dimension as Category or Department. */
-const DEPARTMENT_FILTER_ALIASES = ["Category", "Department"];
-const WORKBOOK_NAME = "Xeo Testing II";
-
-const FILTER_DISPLAY_NAMES = {
-  Category: "Category",
-  "Location Type": "Location Type",
-  LOCATION: "Location",
-};
-
-const filterDisplayName = (fieldName) =>
-  FILTER_DISPLAY_NAMES[fieldName] || fieldName;
-
-/**
- * Build Tableau-shaped filter metadata from BigQuery capital-plan rows.
- * Categories are ordered by total expense descending; Location Type / Location
- * cascade from the current selections.
- */
-const buildFiltersFromRows = (rows, selections = {}) => {
-  const list = Array.isArray(rows) ? rows : [];
-  const selectedDepartment = (() => {
-    for (const name of DEPARTMENT_FILTER_ALIASES) {
-      if (selections[name] !== undefined) {
-        return selections[name];
-      }
-    }
-    return undefined;
-  })();
-  const selectedLocationType = selections["Location Type"];
-  const selectedLocation = selections[LOCATION_FILTER];
-
-  const categoryExpense = {};
-  for (const row of list) {
-    const category = (row.category || "").trim();
-    if (!category) {
-      continue;
-    }
-    categoryExpense[category] =
-      (categoryExpense[category] || 0) + (Number(row.expense_amount) || 0);
-  }
-  const categories = Object.keys(categoryExpense).sort(
-    (a, b) => categoryExpense[b] - categoryExpense[a] || a.localeCompare(b)
-  );
-
-  let scoped = list;
-  if (selectedDepartment) {
-    scoped = scoped.filter(
-      (row) => (row.category || "").trim() === selectedDepartment
-    );
-  }
-
-  const locationTypeExpense = {};
-  for (const row of scoped) {
-    const locationType = (row.location_type || "").trim();
-    if (!locationType) {
-      continue;
-    }
-    locationTypeExpense[locationType] =
-      (locationTypeExpense[locationType] || 0) +
-      (Number(row.expense_amount) || 0);
-  }
-  const locationTypes = Object.keys(locationTypeExpense).sort(
-    (a, b) =>
-      locationTypeExpense[b] - locationTypeExpense[a] || a.localeCompare(b)
-  );
-
-  if (selectedLocationType) {
-    scoped = scoped.filter(
-      (row) => (row.location_type || "").trim() === selectedLocationType
-    );
-  }
-
-  const locationExpense = {};
-  for (const row of scoped) {
-    const location = (row.location || "").trim();
-    if (!location) {
-      continue;
-    }
-    locationExpense[location] =
-      (locationExpense[location] || 0) + (Number(row.expense_amount) || 0);
-  }
-  const locations = Object.keys(locationExpense).sort(
-    (a, b) => locationExpense[b] - locationExpense[a] || a.localeCompare(b)
-  );
-
-  const appliedFor = (fieldName, selected) =>
-    selected ? [selected] : [];
-
-  return [
-    {
-      fieldName: CATEGORY_FILTER,
-      worksheetNames: [],
-      values: categories,
-      appliedValues: appliedFor(CATEGORY_FILTER, selectedDepartment),
-      isAllSelected: !selectedDepartment,
-      filterType: "categorical",
-    },
-    {
-      fieldName: "Location Type",
-      worksheetNames: [],
-      values: locationTypes,
-      appliedValues: appliedFor("Location Type", selectedLocationType),
-      isAllSelected: !selectedLocationType,
-      filterType: "categorical",
-    },
-    {
-      fieldName: LOCATION_FILTER,
-      worksheetNames: [],
-      values: locations,
-      appliedValues: appliedFor(LOCATION_FILTER, selectedLocation),
-      isAllSelected: !selectedLocation,
-      filterType: "categorical",
-    },
-  ];
-};
-
-const orderTopFilters = (filters) =>
-  TOP_FILTER_ORDER.map((name) => (filters || []).find((f) => f.fieldName === name)).filter(
-    Boolean
-  );
-
-const normalizeFieldName = (fieldName) =>
-  String(fieldName || "")
-    .replace(/[\[\]]/g, "")
-    .trim()
-    .toLowerCase();
-
-/** True when a Tableau field should drive the Departments side nav. */
-const isDepartmentFieldName = (fieldName) => {
-  const n = normalizeFieldName(fieldName);
-  if (!n) {
-    return false;
-  }
-  // Never treat top-bar filters as departments.
-  if (TOP_FILTER_ORDER.some((name) => normalizeFieldName(name) === n)) {
-    return false;
-  }
-  if (DEPARTMENT_FILTER_ALIASES.some((name) => normalizeFieldName(name) === n)) {
-    return true;
-  }
-  return (
-    n === "departments" ||
-    n === "dept" ||
-    n === "category name" ||
-    n.endsWith(" category") ||
-    n.startsWith("category ") ||
-    n.includes("department")
-  );
-};
-
-const findDepartmentFilterInList = (filters) => {
-  const list = filters || [];
-  // Prefer exact Category / Department matches, then fuzzy department-like names.
-  for (const name of DEPARTMENT_FILTER_ALIASES) {
-    const match = list.find(
-      (f) => normalizeFieldName(f.fieldName) === normalizeFieldName(name)
-    );
-    if (match) {
-      return match;
-    }
-  }
-  const fuzzy = list.find((f) => isDepartmentFieldName(f.fieldName));
-  return fuzzy || null;
-};
-
-const findDepartmentValuesInFilters = (filters) => {
-  const department = findDepartmentFilterInList(filters);
-  if (!department || !Array.isArray(department.values)) {
-    return [];
-  }
-  return department.values.filter(
-    (value) => value && value !== "(All)" && value !== "All Departments"
-  );
-};
-
-/** Department list from in-memory BigQuery-backed filter state. */
-const getDepartmentValues = (_dashboardKey, dashboardFilters) =>
-  findDepartmentValuesInFilters(dashboardFilters);
-
-const sheetNameFromLink = (link) => (link || "").split("/").pop() || "";
-
-const matchSheetRole = (link) => {
-  const path = (link || "").toLowerCase();
-  if (path.includes("capitalplanoverview")) {
-    return "overview";
-  }
-  if (path.includes("capitalplandetail")) {
-    return "detail";
-  }
-  if (path.endsWith("/forecast") || path.includes("/forecast")) {
-    return "forecast";
-  }
-  if (path.includes("financ")) {
-    return "financing";
-  }
-  return null;
-};
-
-/** Resolve fixed sheet roles from the Xeo Testing II workbook only. */
-const resolveXeoSheetMap = (navigationEntries) => {
-  const empty = {
-    overview: null,
-    detail: null,
-    forecast: null,
-    financing: null,
-  };
-  const workbook = (navigationEntries || []).find(
-    ([, entry]) => entry && entry.name === WORKBOOK_NAME
-  );
-  if (!workbook) {
-    return empty;
-  }
-  const [, entry] = workbook;
-  const map = { ...empty };
-  (entry.dashboards || []).forEach((link, i) => {
-    const role = matchSheetRole(link);
-    if (!role || map[role]) {
-      return;
-    }
-    map[role] = {
-      link,
-      id: (entry.dashboard_ids || [])[i],
-      label: (link || "").split("/").pop(),
-      role,
-    };
-  });
-  return map;
-};
 
 const Landing = ({ idleCountParam }) => {
+  const isCompact = useIsCompactLayout();
+  const isTouch = useIsTouchDevice();
+
   const currentNav = Object.entries(JSON.parse(localStorage.getItem("navigation")) || {});
   const filteredNav = currentNav.filter(([, b]) => !b.name.includes("Curves Export"));
   const sortedNav = filteredNav.sort((a, b) => (a[1].name > b[1].name ? 1 : -1));
@@ -269,15 +61,42 @@ const Landing = ({ idleCountParam }) => {
   const role = JSON.parse(localStorage.getItem("role")) ?? "";
   const isSiteAdmin = role === SITE_ADMIN_ROLE;
 
-  const sheetMap = resolveXeoSheetMap(sortedNav);
+  const sheetMap = resolveCapitalPlanSheetMap(sortedNav);
   const detailLink = sheetMap.detail?.link || "";
   const overviewLink = sheetMap.overview?.link || detailLink;
-  const overviewId = sheetMap.overview?.id || sheetMap.detail?.id;
 
-  const [portalView, setPortalView] = useState("home");
-  const [embedContent, setEmbedContent] = useState("dashboard"); // dashboard | timeline
-  const [activeNavRole, setActiveNavRole] = useState("overview"); // overview | detail | forecast | financing | timeline
-  const [menuOpen, setMenuOpen] = useState(!isMobileDevice());
+  // View state lives in the URL rather than component state so each view is
+  // bookmarkable and the browser back button works.
+  const {
+    portalView,
+    embedContent,
+    adminTab,
+    goHome,
+    goAdmin,
+    goTimeline,
+    goDashboard,
+    selectionsFromUrl,
+  } = usePortalRoute();
+
+  // Resolved during the first render, before <Dashboard> mounts, because
+  // Tableau only reads declarative <viz-filter> children at initialization.
+  // Deferring this to an effect would mount the viz unfiltered and force a
+  // visible re-filter once it painted.
+  const entryRestoreRef = useRef(undefined);
+  if (entryRestoreRef.current === undefined) {
+    entryRestoreRef.current = resolveEntryRestore({
+      portalView,
+      embedContent,
+      selections: selectionsFromUrl(),
+      detailLink: sheetMap.detail?.link,
+    });
+  }
+  const entryRestore = entryRestoreRef.current;
+
+  const [activeNavRole, setActiveNavRole] = useState(
+    entryRestore ? "detail" : "overview"
+  ); // overview | detail | forecast | financing | timeline
+  const [menuOpen, setMenuOpen] = useState(!isCompact);
   const [adminDistricts, setAdminDistricts] = useState([]);
   const [selectedDistrictId, setSelectedDistrictId] = useState(() => {
     try {
@@ -304,12 +123,17 @@ const Landing = ({ idleCountParam }) => {
   });
 
   const [activeDashboard, setActiveDashboard] = useState(true);
-  const [activeURL, setActiveURL] = useState(overviewLink);
-  // Stable Tableau embed src. Sheet switches within Xeo Testing II prefer
-  // activateSheetAsync so filters can be applied without reloading the JWT viz.
-  const [vizSrcLink, setVizSrcLink] = useState(overviewLink);
-  const [activeDashboardId, setActiveDashboardId] = useState(overviewId);
-  const [displayTabs, setDisplayTabs] = useState(false);
+  const [activeURL, setActiveURL] = useState(
+    entryRestore ? entryRestore.detailLink : overviewLink
+  );
+  // Stable Tableau embed src. Sheet switches within the capital-plan workbook
+  // prefer activateSheetAsync so filters apply without reloading the JWT viz.
+  const [vizSrcLink, setVizSrcLink] = useState(
+    entryRestore ? entryRestore.detailLink : overviewLink
+  );
+  // Masks the viz while a sheet switch and its follow-up filters are in
+  // flight, so the user never sees the unfiltered intermediate state.
+  const [sheetSwitching, setSheetSwitching] = useState(false);
 
   const [defaultGroup, setDefaultGroup] = useState(() => {
     if (group === "Admin" || isSiteAdmin) {
@@ -318,28 +142,73 @@ const Landing = ({ idleCountParam }) => {
     return clientGroup || group;
   });
 
-  const [dashboardFilters, setDashboardFilters] = useState([]);
-  const [filterSelections, setFilterSelections] = useState({});
-  const [vizReady, setVizReady] = useState(false);
-
-  const [detailsOverlayOpen, setDetailsOverlayOpen] = useState(false);
-  const [detailsImageUrl, setDetailsImageUrl] = useState(null);
-
   const [idleCount, setIdleCount] = useState(idleCountParam);
 
   const containerRef = useRef(null);
   const dashboardRef = useRef(null);
   const sidebarRef = useRef(null);
-  const vizRef = useRef(null);
-  const activeURLRef = useRef(overviewLink);
-  const activeNavRoleRef = useRef("overview");
-  const filterOpSeqRef = useRef(0);
-  const vizOpChainRef = useRef(Promise.resolve());
-  const dashboardFiltersRef = useRef(dashboardFilters);
-  const pendingDepartmentRef = useRef(null); // null | "__ALL__" | department name
+  const activeURLRef = useRef(
+    entryRestore ? entryRestore.detailLink : overviewLink
+  );
+  const activeNavRoleRef = useRef(entryRestore ? "detail" : "overview");
+  const pendingDepartmentRef = useRef(entryRestore?.department ?? null); // null | "__ALL__" | department name
+  const pendingTopFiltersRef = useRef(entryRestore?.topFilters ?? null); // Location Type / Location from the URL
+  // Fields already narrowed by <viz-filter> at mount. Re-applying an identical
+  // value through the API would cost a round trip and a second re-render, so
+  // the first filter pass after mount skips them.
+  const declarativeFiltersRef = useRef(entryRestore?.declarative ?? null);
+  // Tableau only reads <viz-parameter> at initialization, same as filters.
+  const initialParametersRef = useRef(
+    selectionParametersForRole(entryRestore ? "detail" : "overview", {
+      locationSelected: hasLocationSelection(entryRestore?.topFilters),
+    })
+  );
   const sheetMapRef = useRef(sheetMap);
-  const filterRowsRef = useRef(null);
-  const filterRowsPromiseRef = useRef(null);
+  const logoCacheRef = useRef({ identity: null, key: 0 });
+
+  const validUserContext = useContext(ValidUserContext);
+  const { showToast } = useToast();
+
+  const {
+    vizRef,
+    vizReady,
+    setVizReady,
+    vizBusy,
+    enqueueVizOp,
+    activateWorkbookSheet,
+    applyWorkbookParameters,
+    applyFilterValue,
+    exportImage,
+    refreshData,
+  } = useTableauViz({
+    resolveFallbackViz: () =>
+      dashboardRef.current?.firstChild?.firstChild?.childNodes?.[1],
+  });
+
+  const {
+    dashboardFilters,
+    setDashboardFilters,
+    filterSelections,
+    setFilterSelections,
+    filtersLoading,
+    filtersError,
+    ensureFilterRows,
+    syncFiltersFromRows,
+    refreshFilterDomains,
+    resolveFilterMeta,
+    getDepartmentFieldName,
+    getSelectedDepartment,
+    nextFilterOpSeq,
+    resetFilters,
+  } = useDashboardFilters({
+    initialSelections: entryRestore?.selections,
+    getActiveUrl: () => activeURLRef.current,
+    onLoadError: () =>
+      showToast(
+        "Could not load the department and location filters. The sidebar may be incomplete — try reloading the portal.",
+        { variant: "error", title: "Filters unavailable" }
+      ),
+  });
 
   useEffect(() => {
     activeURLRef.current = activeURL;
@@ -350,72 +219,22 @@ const Landing = ({ idleCountParam }) => {
   }, [activeNavRole]);
 
   useEffect(() => {
-    dashboardFiltersRef.current = dashboardFilters;
-  }, [dashboardFilters]);
-
-  useEffect(() => {
     sheetMapRef.current = sheetMap;
   }, [sheetMap]);
 
-  const validUserContext = useContext(ValidUserContext);
-
-  const ensureFilterRows = async () => {
-    if (Array.isArray(filterRowsRef.current)) {
-      return filterRowsRef.current;
-    }
-    if (filterRowsPromiseRef.current) {
-      return filterRowsPromiseRef.current;
-    }
-    filterRowsPromiseRef.current = fetchDashboardFilters()
-      .then((data) => {
-        const rows = Array.isArray(data?.rows) ? data.rows : [];
-        filterRowsRef.current = rows;
-        return rows;
-      })
-      .catch((error) => {
-        console.error("Error loading dashboard filters from database:", error);
-        filterRowsRef.current = filterRowsRef.current || [];
-        return filterRowsRef.current;
-      })
-      .finally(() => {
-        filterRowsPromiseRef.current = null;
-      });
-    return filterRowsPromiseRef.current;
-  };
-
-  // Prefetch filter domains from BigQuery so Departments are ready before Tableau.
-  // Also drop the legacy Tableau extract cache if it is still present.
+  // Drop the transition mask once the queued sheet/filter work has drained.
   useEffect(() => {
-    try {
-      localStorage.removeItem("dashboard_filter_cache");
-    } catch (error) {
-      // ignore
+    if (sheetSwitching && !vizBusy) {
+      setSheetSwitching(false);
     }
-    let cancelled = false;
-    ensureFilterRows().then((rows) => {
-      if (cancelled || !rows?.length) {
-        return;
-      }
-      if (
-        !dashboardFiltersRef.current?.length ||
-        findDepartmentValuesInFilters(dashboardFiltersRef.current).length === 0
-      ) {
-        setDashboardFilters(buildFiltersFromRows(rows, {}));
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-    // intentionally once on mount for the signed-in session
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [sheetSwitching, vizBusy]);
 
   useEffect(() => {
     if (idleCountParam !== idleCount) {
       setIdleCount(idleCountParam);
-      handleBackgroundRefresh();
+      refreshData();
     }
-  }, [idleCountParam]);
+  }, [idleCountParam, idleCount, refreshData]);
 
   useEffect(() => {
     if (!isSiteAdmin && group !== "Admin") {
@@ -493,7 +312,7 @@ const Landing = ({ idleCountParam }) => {
   }, [activeDistrictName]);
 
   const handleOutsideClick = (event) => {
-    if (!isMobileDevice()) {
+    if (!isCompact) {
       return;
     }
     if (sidebarRef.current && !sidebarRef.current.contains(event.target)) {
@@ -504,7 +323,7 @@ const Landing = ({ idleCountParam }) => {
   const handlers = useSwipeable({
     onSwipedLeft: () => setMenuOpen(false),
     preventDefaultTouchmoveEvent: true,
-    trackMouse: true,
+    trackMouse: false,
   });
 
   useEffect(() => {
@@ -516,184 +335,36 @@ const Landing = ({ idleCountParam }) => {
     return () => {
       document.removeEventListener("mousedown", handleOutsideClick);
     };
-  }, [menuOpen]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [menuOpen, isCompact]);
+
+  // Follow the viewport across the breakpoint: pinned open on wide screens,
+  // collapsed to a drawer when it gets narrow.
+  useEffect(() => {
+    setMenuOpen(!isCompact);
+  }, [isCompact]);
 
   const handleLogoutClick = () => {
     validUserContext.logoutUser();
   };
 
-  const handleExportPNGClick = () => {
-    try {
-      const viz =
-        vizRef.current || dashboardRef.current?.firstChild?.firstChild?.childNodes?.[1];
-      if (viz && viz.exportImageAsync) {
-        viz.exportImageAsync();
-      }
-    } catch (error) {
-      console.error("Error exporting PNG:", error);
-    }
-  };
-
-  const handleBackgroundRefresh = () => {
-    try {
-      const viz =
-        vizRef.current || dashboardRef.current?.firstChild?.firstChild?.childNodes?.[1];
-      if (viz && viz.refreshDataAsync) {
-        viz.refreshDataAsync().catch((error) => {
-          console.error("Error refreshing dashboard:", error);
-        });
-      }
-    } catch (error) {
-      console.error("Error refreshing dashboard:", error);
-    }
-  };
-
-  const getDepartmentFieldName = (filters = dashboardFiltersRef.current) => {
-    const match = findDepartmentFilterInList(filters);
-    return match?.fieldName || CATEGORY_FILTER;
-  };
-
-  const getSelectedDepartment = (selections = filterSelections) => {
-    for (const name of DEPARTMENT_FILTER_ALIASES) {
-      if (selections[name] !== undefined) {
-        return selections[name];
-      }
-    }
-    return undefined;
-  };
-
-  const activateWorkbookSheet = async (viz, link) => {
-    if (!viz?.workbook || !link) {
-      return false;
-    }
-    const target = sheetNameFromLink(link);
-    if (!target) {
-      return false;
-    }
-    const published = viz.workbook.publishedSheetsInfo || [];
-    const match =
-      published.find((sheet) => sheet.name === target) ||
-      published.find(
-        (sheet) =>
-          (sheet.name || "").replace(/\s+/g, "").toLowerCase() ===
-          target.replace(/\s+/g, "").toLowerCase()
-      ) ||
-      published.find((sheet) =>
-        (sheet.url || "").toLowerCase().includes(target.toLowerCase())
+  const handleExportPNGClick = async () => {
+    const result = await exportImage();
+    if (result === "unavailable") {
+      showToast(
+        "The capital plan is still loading. Wait for the dashboard to finish, then try the export again.",
+        { variant: "info", title: "Nothing to export yet" }
       );
-    if (!match) {
-      return false;
+    } else if (result === "failed") {
+      showToast("Could not export the capital plan image. Please try again.", {
+        variant: "error",
+        title: "Export failed",
+      });
     }
-    try {
-      await viz.workbook.activateSheetAsync(match.name);
-      return true;
-    } catch (error) {
-      console.warn(`Unable to activate sheet "${match.name}":`, error);
-      return false;
-    }
-  };
-
-  const applyFilterValue = async (viz, filter, value) => {
-    if (!viz || !filter?.fieldName) {
-      return;
-    }
-    const activeSheet = viz.workbook?.activeSheet;
-    if (!activeSheet) {
-      console.warn("No active sheet available to apply filter");
-      return;
-    }
-
-    // Apply per worksheet so sheets excluded in the Tableau workbook definition
-    // (e.g. TOTAL CAPITAL PLAN) are not forced through a dashboard-level filter.
-    const worksheets =
-      activeSheet.sheetType === "dashboard" ? activeSheet.worksheets : [activeSheet];
-
-    const targets = worksheets.filter(
-      (worksheet) =>
-        (worksheet.name || "").trim().toUpperCase() !== "TOTAL CAPITAL PLAN"
-    );
-
-    const results = await Promise.all(
-      targets.map(async (worksheet) => {
-        try {
-          if (value === "__ALL__") {
-            await worksheet.clearFilterAsync(filter.fieldName);
-          } else {
-            await worksheet.applyFilterAsync(
-              filter.fieldName,
-              [value],
-              "replace"
-            );
-          }
-          return true;
-        } catch (error) {
-          // Worksheet may not expose this field — ignore and continue.
-          return false;
-        }
-      })
-    );
-
-    if (!results.some(Boolean)) {
-      console.warn(`Unable to apply filter "${filter.fieldName}" to any worksheet`);
-    }
-  };
-
-  const resolveFilterMeta = (fieldName, fallback) => {
-    const fromState = dashboardFiltersRef.current.find((f) => f.fieldName === fieldName);
-    if (fromState) {
-      return fromState;
-    }
-    if (fallback && fallback.fieldName === fieldName) {
-      return fallback;
-    }
-    return {
-      fieldName,
-      worksheetNames: [],
-      values: [],
-    };
-  };
-
-  const syncFiltersFromRows = (selections) => {
-    const rows = filterRowsRef.current;
-    if (!Array.isArray(rows) || rows.length === 0) {
-      return [];
-    }
-    const fresh = buildFiltersFromRows(rows, selections || {});
-    setDashboardFilters(fresh);
-    return fresh;
-  };
-
-  const enqueueVizOp = (op) => {
-    const next = vizOpChainRef.current.then(op).catch((error) => {
-      console.error("Error in queued viz operation:", error);
-    });
-    vizOpChainRef.current = next;
-    return next;
-  };
-
-  const backgroundRefresh = async (_viz, dashboardKey, selections, seq) => {
-    const rows = await ensureFilterRows();
-    if (!rows?.length) {
-      console.warn("No capital-plan filter rows returned from database.");
-      return [];
-    }
-
-    const fresh = buildFiltersFromRows(rows, selections || {});
-    const onDetailDashboard =
-      !dashboardKey || activeURLRef.current === dashboardKey;
-    if (seq === filterOpSeqRef.current && onDetailDashboard) {
-      setDashboardFilters(fresh);
-    } else if (
-      findDepartmentValuesInFilters(dashboardFiltersRef.current).length === 0
-    ) {
-      // Keep Departments side nav populated even when not on Detail.
-      setDashboardFilters(buildFiltersFromRows(rows, {}));
-    }
-    return fresh;
   };
 
   const applyDepartmentOnViz = async (viz, departmentValue, dashboardKey) => {
-    const seq = ++filterOpSeqRef.current;
+    const seq = nextFilterOpSeq();
     const departmentField = getDepartmentFieldName();
     const newSelections = departmentValue
       ? { [departmentField]: departmentValue }
@@ -717,7 +388,8 @@ const Landing = ({ idleCountParam }) => {
         const downstreamFilter = resolveFilterMeta(name);
         await applyFilterValue(viz, downstreamFilter, "__ALL__");
       }
-      await backgroundRefresh(viz, dashboardKey, newSelections, seq);
+      await applyWorkbookParameters(viz, [locationSelectedParameter(false)]);
+      await refreshFilterDomains(dashboardKey, newSelections, seq);
     });
   };
 
@@ -729,41 +401,63 @@ const Landing = ({ idleCountParam }) => {
       sheetMapRef.current.detail?.link || activeURLRef.current;
     setVizReady(true);
 
-    const seq = ++filterOpSeqRef.current;
+    const seq = nextFilterOpSeq();
     const pendingValue =
       pending !== undefined ? pending : pendingDepartmentRef.current;
     pendingDepartmentRef.current = null;
+    // Set when the view was restored from a URL carrying Location Type /
+    // Location params; empty for an ordinary department click.
+    const pendingTop = pendingTopFiltersRef.current || {};
+    pendingTopFiltersRef.current = null;
+
+    // Consumed once: any field Tableau already narrowed at initialization does
+    // not need a second, identical round trip.
+    const declarative = declarativeFiltersRef.current;
+    declarativeFiltersRef.current = null;
+    const appliedAtInit = (field, value) =>
+      Boolean(
+        declarative?.some((item) => item.field === field && item.value === value)
+      );
 
     const departmentField = getDepartmentFieldName();
-    const initialSelections =
-      pendingValue && pendingValue !== "__ALL__"
-        ? { [departmentField]: pendingValue }
-        : {};
+    const initialSelections = {};
+    if (pendingValue && pendingValue !== "__ALL__") {
+      initialSelections[departmentField] = pendingValue;
+    }
+    TOP_FILTER_ORDER.forEach((name) => {
+      if (pendingTop[name]) {
+        initialSelections[name] = pendingTop[name];
+      }
+    });
     setFilterSelections(initialSelections);
     syncFiltersFromRows(initialSelections);
 
     enqueueVizOp(async () => {
-      // Load filter domains from BigQuery, then apply to Tableau.
-      const fresh = await backgroundRefresh(
+      await applyWorkbookParameters(
         viz,
+        selectionParametersForRole("detail", {
+          locationSelected: hasLocationSelection(initialSelections),
+        })
+      );
+      // Load filter domains from BigQuery, then apply to Tableau.
+      const fresh = await refreshFilterDomains(
         dashboardKey,
         initialSelections,
         seq
       );
+      // Undefined falls back to the current filter state inside the hook.
       const liveDepartmentField = getDepartmentFieldName(
-        fresh?.length ? fresh : dashboardFiltersRef.current
+        fresh?.length ? fresh : undefined
       );
 
       if (pendingValue && pendingValue !== "__ALL__") {
-        await applyFilterValue(
-          viz,
-          resolveFilterMeta(liveDepartmentField),
-          pendingValue
-        );
-        for (const name of TOP_FILTER_ORDER) {
-          await applyFilterValue(viz, resolveFilterMeta(name), "__ALL__");
+        if (!appliedAtInit(liveDepartmentField, pendingValue)) {
+          await applyFilterValue(
+            viz,
+            resolveFilterMeta(liveDepartmentField),
+            pendingValue
+          );
         }
-        await backgroundRefresh(viz, dashboardKey, initialSelections, seq);
       } else {
         await applyFilterValue(
           viz,
@@ -775,10 +469,14 @@ const Landing = ({ idleCountParam }) => {
             await applyFilterValue(viz, { fieldName: alias }, "__ALL__");
           }
         }
-        for (const name of TOP_FILTER_ORDER) {
-          await applyFilterValue(viz, resolveFilterMeta(name), "__ALL__");
+      }
+      for (const name of TOP_FILTER_ORDER) {
+        const value = pendingTop[name] || "__ALL__";
+        if (!appliedAtInit(name, value)) {
+          await applyFilterValue(viz, resolveFilterMeta(name), value);
         }
       }
+      await refreshFilterDomains(dashboardKey, initialSelections, seq);
     });
   };
 
@@ -787,9 +485,13 @@ const Landing = ({ idleCountParam }) => {
     const role = activeNavRoleRef.current;
     setVizReady(true);
 
-    // Overview / Funding: no filter extraction.
+    // Overview / Funding: no filter extraction. Keep the selection parameters
+    // False so Tableau does not treat these views as a selected department.
     if (!isDetailRole(role)) {
       setFilterSelections({});
+      enqueueVizOp(async () => {
+        await applyWorkbookParameters(viz, selectionParametersForRole(role));
+      });
       return;
     }
 
@@ -819,9 +521,10 @@ const Landing = ({ idleCountParam }) => {
       delete newSelections[name];
     });
 
-    const seq = ++filterOpSeqRef.current;
+    const seq = nextFilterOpSeq();
     setFilterSelections(newSelections);
     syncFiltersFromRows(newSelections);
+    goDashboard(newSelections);
 
     enqueueVizOp(async () => {
       const liveFilter = resolveFilterMeta(filter.fieldName, filter);
@@ -834,7 +537,10 @@ const Landing = ({ idleCountParam }) => {
         const downstreamFilter = resolveFilterMeta(name);
         await applyFilterValue(viz, downstreamFilter, "__ALL__");
       }
-      await backgroundRefresh(viz, dashboardKey, newSelections, seq);
+      await applyWorkbookParameters(viz, [
+        locationSelectedParameter(hasLocationSelection(newSelections)),
+      ]);
+      await refreshFilterDomains(dashboardKey, newSelections, seq);
     });
   };
 
@@ -845,28 +551,28 @@ const Landing = ({ idleCountParam }) => {
       return;
     }
     validUserContext.localAuthCheck(false);
-    setEmbedContent("dashboard");
     setActiveNavRole(role);
     activeNavRoleRef.current = role;
     setActiveDashboard(true);
-    setDisplayTabs(false);
     pendingDepartmentRef.current = null;
 
     if (clearFilters && role !== "detail") {
       setFilterSelections({});
+      goDashboard({});
+    } else {
+      goDashboard();
     }
 
     if (activeURLRef.current === sheet.link && vizReady && vizRef.current) {
-      if (isMobileDevice()) {
+      if (isCompact) {
         setMenuOpen(false);
       }
       return false;
     }
 
-    filterOpSeqRef.current++;
+    nextFilterOpSeq();
     activeURLRef.current = sheet.link;
     setActiveURL(sheet.link);
-    setActiveDashboardId(sheet.id);
     if (role === "detail") {
       syncFiltersFromRows(filterSelections);
     }
@@ -874,12 +580,17 @@ const Landing = ({ idleCountParam }) => {
     const viz = vizRef.current;
     if (vizReady && viz?.workbook) {
       setVizReady(false);
+      setSheetSwitching(true);
       enqueueVizOp(async () => {
         const activated = await activateWorkbookSheet(viz, sheet.link);
         if (activated) {
           if (role === "detail") {
             runDetailReady(viz, { pending: null });
           } else {
+            await applyWorkbookParameters(
+              viz,
+              selectionParametersForRole(role)
+            );
             setVizReady(true);
           }
         } else {
@@ -892,7 +603,7 @@ const Landing = ({ idleCountParam }) => {
       setVizReady(false);
     }
 
-    if (isMobileDevice()) {
+    if (isCompact) {
       setMenuOpen(false);
     }
     return true;
@@ -906,7 +617,9 @@ const Landing = ({ idleCountParam }) => {
 
     const detail = sheetMapRef.current.detail;
     if (!detail?.link) {
-      console.warn("CapitalPlanDetail sheet not found in Xeo Testing II navigation");
+      console.warn(
+        `CapitalPlanDetail sheet not found in ${CAPITAL_PLAN_WORKBOOK} navigation`
+      );
       return;
     }
 
@@ -917,14 +630,16 @@ const Landing = ({ idleCountParam }) => {
       vizReady &&
       !!vizRef.current;
 
-    setEmbedContent("dashboard");
+    const departmentFieldForUrl = getDepartmentFieldName();
+    goDashboard({ [departmentFieldForUrl]: value });
     setActiveNavRole("detail");
     activeNavRoleRef.current = "detail";
 
     // Already on Detail: apply the department filter.
     if (wasShowingDetail) {
+      setSheetSwitching(true);
       applyDepartmentOnViz(vizRef.current, value, detail.link);
-      if (isMobileDevice()) {
+      if (isCompact) {
         setMenuOpen(false);
       }
       return;
@@ -933,17 +648,18 @@ const Landing = ({ idleCountParam }) => {
     pendingDepartmentRef.current = value;
     const departmentField = getDepartmentFieldName();
     setFilterSelections({ [departmentField]: value });
-    filterOpSeqRef.current++;
+    nextFilterOpSeq();
     activeURLRef.current = detail.link;
     setActiveURL(detail.link);
-    setActiveDashboardId(detail.id);
     setActiveDashboard(true);
     syncFiltersFromRows({ [departmentField]: value });
-    setDisplayTabs(false);
 
     const viz = vizRef.current;
     if (embedContent === "dashboard" && vizReady && viz?.workbook) {
       setVizReady(false);
+      // Activating the sheet paints it unfiltered before the department filter
+      // lands. Mask the gap so the switch reads as one step.
+      setSheetSwitching(true);
       enqueueVizOp(async () => {
         const activated = await activateWorkbookSheet(viz, detail.link);
         if (activated) {
@@ -958,7 +674,7 @@ const Landing = ({ idleCountParam }) => {
       setVizReady(false);
     }
 
-    if (isMobileDevice()) {
+    if (isCompact) {
       setMenuOpen(false);
     }
   };
@@ -979,60 +695,27 @@ const Landing = ({ idleCountParam }) => {
     if (selectedDept !== undefined) {
       newSelections[departmentField] = selectedDept;
     }
-    const seq = ++filterOpSeqRef.current;
+    const seq = nextFilterOpSeq();
     setFilterSelections(newSelections);
     syncFiltersFromRows(newSelections);
+    goDashboard(newSelections);
 
     enqueueVizOp(async () => {
       for (const name of TOP_FILTER_ORDER) {
         const downstreamFilter = resolveFilterMeta(name);
         await applyFilterValue(viz, downstreamFilter, "__ALL__");
       }
-      await backgroundRefresh(viz, dashboardKey, newSelections, seq);
-    });
-  };
-
-  const buildDetailsUrl = (segments) => {
-    const encoded = segments.map((s) => encodeURIComponent(s)).join("/");
-    return `https://storage.googleapis.com/bp_portal_artifacts/details/${encoded}/display.jpg`;
-  };
-
-  const getDetailsCandidateSegments = () => {
-    const client = clientGroup || defaultGroup;
-    const departmentField = getDepartmentFieldName();
-    const orderedNames = [departmentField, ...TOP_FILTER_ORDER];
-    const filterSegments = orderedNames
-      .filter((name) => filterSelections[name] !== undefined)
-      .map((name) => filterSelections[name]);
-    return [client, ...filterSegments];
-  };
-
-  const handleOpenDetails = () => {
-    setDetailsImageUrl(buildDetailsUrl(getDetailsCandidateSegments()));
-    setDetailsOverlayOpen(true);
-  };
-
-  const handleDetailsImageError = () => {
-    setDetailsImageUrl((current) => {
-      if (!current) {
-        return null;
-      }
-      const base = "https://storage.googleapis.com/bp_portal_artifacts/details/";
-      const withoutBase = current.replace(base, "").replace("/display.jpg", "");
-      const parts = withoutBase.split("/").map(decodeURIComponent);
-      if (parts.length <= 2) {
-        return null;
-      }
-      return buildDetailsUrl(parts.slice(0, -1));
+      await applyWorkbookParameters(viz, [locationSelectedParameter(false)]);
+      await refreshFilterDomains(dashboardKey, newSelections, seq);
     });
   };
 
   const handleTimelineClick = () => {
     validUserContext.localAuthCheck(false);
-    setEmbedContent("timeline");
+    goTimeline();
     setActiveNavRole("timeline");
     setFilterSelections({});
-    if (isMobileDevice()) {
+    if (isCompact) {
       setMenuOpen(false);
     }
   };
@@ -1064,8 +747,8 @@ const Landing = ({ idleCountParam }) => {
             <Dashboard
               key={vizRemountKey}
               dashboardLinkProp={vizSrcLink}
-              displayTabs={displayTabs}
-              idleCount={idleCount}
+              initialFilters={declarativeFiltersRef.current}
+              initialParameters={initialParametersRef.current}
               onDashboardReady={handleDashboardReady}
             />
           </div>
@@ -1081,20 +764,22 @@ const Landing = ({ idleCountParam }) => {
     setDefaultGroup(districtName);
     setVizReady(false);
     vizRef.current = null;
-    setEmbedContent("dashboard");
+    if (portalView === "capital-plan") {
+      goDashboard({});
+    }
     setActiveNavRole("overview");
     pendingDepartmentRef.current = null;
-    filterOpSeqRef.current += 1;
-    setFilterSelections({});
-    filterRowsRef.current = null;
-    filterRowsPromiseRef.current = null;
-    setDashboardFilters([]);
+    pendingTopFiltersRef.current = null;
+    // The new district remounts the viz on the unfiltered overview, so the
+    // entry URL's filters must not ride along.
+    declarativeFiltersRef.current = null;
+    initialParametersRef.current = selectionParametersForRole("overview");
+    resetFilters();
     const overview = sheetMapRef.current.overview;
     if (overview?.link) {
       activeURLRef.current = overview.link;
       setActiveURL(overview.link);
       setVizSrcLink(overview.link);
-      setActiveDashboardId(overview.id);
     }
     setVizRemountKey((key) => key + 1);
   };
@@ -1137,54 +822,19 @@ const Landing = ({ idleCountParam }) => {
       if (rows?.length) {
         setDashboardFilters(buildFiltersFromRows(rows, {}));
       }
+      showToast(`Now viewing ${nextName}.`, {
+        variant: "success",
+        title: "Client switched",
+      });
     } catch (error) {
       console.error("Failed to switch client district:", error);
-      window.alert(error.message || "Could not switch client district.");
+      showToast(error.message || "Could not switch client district.", {
+        variant: "error",
+        title: "Switch failed",
+      });
     } finally {
       setDistrictSwitching(false);
     }
-  };
-
-  const renderDetailsOverlay = () => {
-    if (!detailsOverlayOpen) {
-      return null;
-    }
-    const selectionCrumbs = [getDepartmentFieldName(), ...TOP_FILTER_ORDER]
-      .filter((name) => filterSelections[name] !== undefined)
-      .map((name) => filterSelections[name]);
-
-    return (
-      <div className={classes.detailsOverlay} onClick={() => setDetailsOverlayOpen(false)}>
-        <div className={classes.detailsModal} onClick={(e) => e.stopPropagation()}>
-          <div className={classes.detailsModalHeader}>
-            <div className={classes.detailsBreadcrumb}>
-              {[defaultGroup, ...selectionCrumbs].join(" › ")}
-            </div>
-            <button
-              className={classes.detailsCloseBtn}
-              onClick={() => setDetailsOverlayOpen(false)}
-              aria-label="Close"
-            >
-              ✕
-            </button>
-          </div>
-          <div className={classes.detailsModalBody}>
-            {detailsImageUrl ? (
-              <img
-                className={classes.detailsImage}
-                src={detailsImageUrl}
-                alt="Details"
-                onError={handleDetailsImageError}
-              />
-            ) : (
-              <div className={classes.detailsNoContent}>
-                <div>No details available for this selection.</div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
   };
 
   const departmentValues = getDepartmentValues(detailLink, dashboardFilters);
@@ -1195,13 +845,24 @@ const Landing = ({ idleCountParam }) => {
   );
   const onDetail = embedContent === "dashboard" && activeNavRole === "detail";
 
-  const randomNumber = Math.floor(Math.random() * 1000000);
   const logoKey = (clientGroup || defaultGroup).toLowerCase();
   const displayName = clientGroup || defaultGroup;
-  const legacyLogoLink = `https://storage.googleapis.com/bp_portal_artifacts/${logoKey}.png?v=${randomNumber}`;
-  const defaultLink = `${DEFAULT_LOGO_URL}?v=${randomNumber}`;
+  const tagline = taglineFor(displayName);
+  // Cache-buster tied to the branding identity, not to render count. It used
+  // to be Math.random() evaluated inline, so the logo src changed on every
+  // render and the browser re-fetched the image each time.
+  const logoIdentity = `${logoKey}|${brandLogoUrl}`;
+  if (logoCacheRef.current.identity !== logoIdentity) {
+    logoCacheRef.current = {
+      identity: logoIdentity,
+      key: Math.floor(Math.random() * 1000000),
+    };
+  }
+  const logoCacheKey = logoCacheRef.current.key;
+  const legacyLogoLink = `https://storage.googleapis.com/bp_portal_artifacts/${logoKey}.png?v=${logoCacheKey}`;
+  const defaultLink = `${DEFAULT_LOGO_URL}?v=${logoCacheKey}`;
   const companyLink = brandLogoUrl
-    ? `${brandLogoUrl}${brandLogoUrl.includes("?") ? "&" : "?"}v=${randomNumber}`
+    ? `${brandLogoUrl}${brandLogoUrl.includes("?") ? "&" : "?"}v=${logoCacheKey}`
     : legacyLogoLink;
   const themeStyle = { "--client-accent": brandColor || DEFAULT_BRAND_COLOR };
 
@@ -1214,194 +875,22 @@ const Landing = ({ idleCountParam }) => {
     event.target.src = legacyLogoLink;
   };
 
-  const renderSidebarNav = () => (
-    <>
-      <div className={classes.navSection}>
-        <div className={classes.navSectionTitle}>At a Glance</div>
-        <div
-          className={`${classes.sideButton} ${
-            embedContent === "timeline" ? classes.active : ""
-          }`}
-          onClick={handleTimelineClick}
-        >
-          Project Timeline
-        </div>
-        {sheetMap.overview && (
-          <div
-            className={`${classes.sideButton} ${
-              embedContent === "dashboard" && activeNavRole === "overview"
-                ? classes.active
-                : ""
-            }`}
-            onClick={handleOverviewClick}
-          >
-            Capital Plan Overview
-          </div>
-        )}
-      </div>
-
-      <div className={classes.navSection}>
-        <div className={classes.navSectionTitle}>Departments</div>
-        {departmentValues.map((value) => (
-          <div
-            key={value}
-            className={`${classes.sideButton} ${
-              onDetail && selectedDepartment === value ? classes.active : ""
-            }`}
-            onClick={() => handleDepartmentSelect(value)}
-          >
-            {value}
-          </div>
-        ))}
-      </div>
-
-      {(sheetMap.forecast || sheetMap.financing) && (
-        <div className={classes.navSection}>
-          <div className={classes.navSectionTitle}>Funding</div>
-          {sheetMap.forecast && (
-            <div
-              className={`${classes.sideButton} ${
-                embedContent === "dashboard" && activeNavRole === "forecast"
-                  ? classes.active
-                  : ""
-              }`}
-              onClick={() => handleFundingClick("forecast")}
-            >
-              Forecast
-            </div>
-          )}
-          {sheetMap.financing && (
-            <div
-              className={`${classes.sideButton} ${
-                embedContent === "dashboard" && activeNavRole === "financing"
-                  ? classes.active
-                  : ""
-              }`}
-              onClick={() => handleFundingClick("financing")}
-            >
-              Financing
-            </div>
-          )}
-        </div>
-      )}
-    </>
-  );
-
-  const renderTopFilters = () => {
-    if (!onDetail) {
-      return null;
-    }
-    const interactionDisabled = !vizReady;
-    const filtersToShow =
-      topFilters.length > 0
-        ? topFilters
-        : TOP_FILTER_ORDER.map((fieldName) => ({
-            fieldName,
-            values: [],
-            worksheetNames: [],
-          }));
-
-    return (
-      <div className={classes.contextBar}>
-        <div className={classes.contextBarFilters}>
-          <span className={classes.contextBarLabel}>Filter by</span>
-          {filtersToShow.map((filter) => {
-            const selected = filterSelections[filter.fieldName] ?? "";
-            return (
-              <div className={classes.contextBarItem} key={filter.fieldName}>
-                <div className={classes.contextBarSelectWrapper}>
-                  <select
-                    className={classes.contextBarSelect}
-                    disabled={interactionDisabled || !(filter.values || []).length}
-                    value={selected}
-                    onChange={(e) => handleTopFilterChange(filter, e.target.value)}
-                  >
-                    <option value="">
-                      All {filterDisplayName(filter.fieldName).replace(/Type$/, "Types")}
-                    </option>
-                    {(filter.values || []).map((value, valueIndex) => (
-                      <option key={valueIndex} value={value}>
-                        {value}
-                      </option>
-                    ))}
-                  </select>
-                  <span className={classes.contextBarArrow}>▾</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        {hasTopSelection && (
-          <button
-            className={`${classes.contextBarClear} ${
-              interactionDisabled ? classes.contextBarClearDisabled : ""
-            }`}
-            onClick={handleClearTopFilters}
-            disabled={interactionDisabled}
-          >
-            Clear
-          </button>
-        )}
-      </div>
-    );
-  };
-
-  const renderAppTopBar = () => (
-    <header className={classes.appTopBar}>
-      <div className={classes.appTopBarLeft}>
-        {isMobileDevice() && (
-          <img
-            className={classes.menuicon}
-            src={menuIcon}
-            alt="Menu"
-            onClick={handleMenuClick}
-          />
-        )}
-        <img
-          className={classes.appTopBarLogo}
-          src={companyLink}
-          alt={displayName}
-          onError={handleLogoError}
-        />
-        <div className={classes.appTopBarText}>
-          <div className={classes.appTopBarTitle}>
-            {displayName}
-            <span className={classes.appTopBarSep}>|</span>
-            <span className={classes.appTopBarTag}>Empower · Challenge · Support</span>
-          </div>
-          <div className={classes.appTopBarSub}>
-            Capital Plan Portal · FY 2026–2035
-          </div>
-        </div>
-      </div>
-      <div className={classes.appTopBarActions}>
-        <button
-          type="button"
-          className={classes.appTopBarBtn}
-          onClick={() => setPortalView("home")}
-        >
-          ← Portal
-        </button>
-        <button
-          type="button"
-          className={classes.appTopBarBtnPrimary}
-          onClick={handleExportPNGClick}
-        >
-          Export Capital Plan
-        </button>
-        <button type="button" className={classes.appTopBarBtn} onClick={handleLogoutClick}>
-          Log out
-        </button>
-      </div>
-    </header>
-  );
-
   const renderEmbedShell = () => (
     <div className={classes.landing} style={themeStyle}>
-      {renderDetailsOverlay()}
-      {renderAppTopBar()}
+      <AppTopBar
+        showMenuButton={isCompact}
+        menuOpen={menuOpen}
+        onMenuClick={handleMenuClick}
+        logoUrl={companyLink}
+        onLogoError={handleLogoError}
+        displayName={displayName}
+        tagline={tagline}
+        onBackToPortal={goHome}
+        onExport={handleExportPNGClick}
+        onLogout={handleLogoutClick}
+      />
       <div className={classes.embedBody}>
-        {isMobileDevice() && menuOpen && <div className={classes.overlay} />}
+        {isCompact && menuOpen && <div className={classes.overlay} />}
         <div
           ref={(node) => {
             sidebarRef.current = node;
@@ -1411,28 +900,27 @@ const Landing = ({ idleCountParam }) => {
         >
           <div className={classes.sidebartop}>
             {(isSiteAdmin || group === "Admin") && adminDistricts.length > 0 && (
-              <div className={classes.sideState}>
-                <div className={classes.selectDropdownWrapper}>
-                  <select
-                    value={selectedDistrictId}
-                    onChange={(e) => handleImpersonateDistrict(e.target.value)}
-                    className={classes.selectDropdown}
-                    disabled={districtSwitching}
-                  >
-                    {adminDistricts.map((district) => (
-                      <option
-                        key={district.district_id}
-                        value={district.district_id}
-                      >
-                        {district.district_name}
-                      </option>
-                    ))}
-                  </select>
-                  <span className={classes.selectArrow}>▼</span>
-                </div>
-              </div>
+              <DistrictSelect
+                districts={adminDistricts}
+                selectedDistrictId={selectedDistrictId}
+                onChange={handleImpersonateDistrict}
+                switching={districtSwitching}
+              />
             )}
-            {renderSidebarNav()}
+            <SidebarNav
+              sheetMap={sheetMap}
+              embedContent={embedContent}
+              activeNavRole={activeNavRole}
+              departmentValues={departmentValues}
+              selectedDepartment={selectedDepartment}
+              onDetail={onDetail}
+              filtersLoading={filtersLoading}
+              filtersError={filtersError}
+              onTimelineClick={handleTimelineClick}
+              onOverviewClick={handleOverviewClick}
+              onDepartmentSelect={handleDepartmentSelect}
+              onFundingClick={handleFundingClick}
+            />
           </div>
           <div className={classes.sidebarBrand}>
             <div className={classes.poweredByLabel}>Powered by</div>
@@ -1441,12 +929,21 @@ const Landing = ({ idleCountParam }) => {
         </div>
         <div
           className={`${
-            menuOpen && !isMobileDevice()
+            menuOpen && !isCompact
               ? classes.contentblock
               : classes.contentblockMobile
           }`}
         >
-          {renderTopFilters()}
+          {onDetail && (
+            <ContextFilterBar
+              filters={topFilters}
+              selections={filterSelections}
+              vizReady={vizReady}
+              hasSelection={hasTopSelection}
+              onFilterChange={handleTopFilterChange}
+              onClear={handleClearTopFilters}
+            />
+          )}
           <div
             className={`${classes.dashboardblock} ${
               embedContent === "timeline" || !onDetail
@@ -1456,17 +953,38 @@ const Landing = ({ idleCountParam }) => {
             ref={dashboardRef}
           >
             {renderContent()}
+            {sheetSwitching && embedContent !== "timeline" && (
+              <div
+                className={classes.filterLoadingOverlay}
+                role="status"
+                aria-live="polite"
+              >
+                <div className={classes.filterLoadingCard}>
+                  <div className={classes.filterLoadingSpinner} />
+                  <span className={classes.filterLoadingText}>
+                    Applying filters…
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
     </div>
   );
 
-  if (portalView === "admin" && isSiteAdmin) {
+
+  if (portalView === "admin") {
+    // Deep link into /admin without the role: send them back to the portal.
+    if (!isSiteAdmin) {
+      return <Navigate to={ROUTES.home} replace />;
+    }
     return (
       <div style={themeStyle}>
         <AdminPanel
-          onBack={() => setPortalView("home")}
+          activeTab={adminTab}
+          onTabChange={goAdmin}
+          onBack={goHome}
           onLogout={handleLogoutClick}
         />
       </div>
@@ -1486,17 +1004,15 @@ const Landing = ({ idleCountParam }) => {
           selectedDistrictId={selectedDistrictId}
           onDistrictChange={handleImpersonateDistrict}
           districtSwitching={districtSwitching}
-          onOpenAdmin={() => setPortalView("admin")}
+          onOpenAdmin={() => goAdmin("users")}
           onOpenCapitalPlan={() => {
             setActiveNavRole("overview");
-            setEmbedContent("dashboard");
             if (sheetMap.overview?.link) {
               activeURLRef.current = sheetMap.overview.link;
               setActiveURL(sheetMap.overview.link);
               setVizSrcLink(sheetMap.overview.link);
-              setActiveDashboardId(sheetMap.overview.id);
             }
-            setPortalView("capital-plan");
+            goDashboard({});
           }}
           onLogout={handleLogoutClick}
         />
@@ -1504,7 +1020,7 @@ const Landing = ({ idleCountParam }) => {
     );
   }
 
-  return isMobileDevice() ? (
+  return isCompact && isTouch ? (
     <div {...handlers}>{renderEmbedShell()}</div>
   ) : (
     renderEmbedShell()

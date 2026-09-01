@@ -1,4 +1,5 @@
-import { useRef, useEffect, useContext } from "react";
+import { useRef, useEffect, useContext, useState } from "react";
+import { Link } from "react-router-dom";
 
 import classes from "./LoginForm.module.scss";
 import ValidUserContext from "../authCheck";
@@ -10,6 +11,9 @@ function LoginForm() {
 
   const emailInputRef = useRef();
   const passwordInputRef = useRef();
+  const [rememberMe, setRememberMe] = useState(
+    () => JSON.parse(localStorage.getItem("remember-me")) ? true : false
+  );
 
   useEffect(() => {
     if (isInitial) {
@@ -20,17 +24,20 @@ function LoginForm() {
 
   const submitHandler = (event) => {
     event.preventDefault();
+    if (validUserContext.isLoggingIn) {
+      return;
+    }
 
     validUserContext.apiAuthCheck(
       emailInputRef.current.value,
       passwordInputRef.current.value,
-      false
+      false,
+      rememberMe
     );
   };
 
-  const handleForgotClick = () => {
-    validUserContext.forgotPassword();
-  };
+  const submitDisabled =
+    validUserContext.isLoggedIn || validUserContext.isLoggingIn;
 
   return (
     <div className={classes.logincontainer}>
@@ -63,14 +70,27 @@ function LoginForm() {
             required={!validUserContext.isLoggedIn}
           />
         </div>
-        <div className={classes.forgot} onClick={() => handleForgotClick()}>
-          Forgot Password?
+
+        <div className={classes.loginOptions}>
+          <label className={classes.rememberMe}>
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(event) => setRememberMe(event.target.checked)}
+            />
+            <span>Keep me signed in</span>
+          </label>
+          <Link className={classes.forgot} to="/forgot-password">
+            Forgot Password?
+          </Link>
         </div>
-        <button
-          className={classes.loginBtn}
-          disabled={validUserContext.isLoggedIn}
-        >
-          {validUserContext.isLoggedIn ? "Already logged in" : "Sign In"}
+
+        <button className={classes.loginBtn} disabled={submitDisabled}>
+          {validUserContext.isLoggedIn
+            ? "Already logged in"
+            : validUserContext.isLoggingIn
+            ? "Signing in…"
+            : "Sign In"}
         </button>
       </form>
     </div>

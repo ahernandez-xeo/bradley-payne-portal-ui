@@ -45,6 +45,6 @@
 .logoDivider {
   width: 1px;
   height: 48px;
-  background-color: #d0d5da;
+  background-color: var(--input-border);
   flex-shrink: 0;
 }

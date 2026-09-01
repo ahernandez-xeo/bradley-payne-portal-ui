@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import classes from "./NarrativeMapping.module.scss";
-import { htmlToPlainText } from "./SimpleRichTextEditor";
+import { htmlToPlainText } from "../utils/html";
 import {
   fetchAdminDistricts,
   fetchDistrictBranding,
@@ -15,8 +15,22 @@ import {
   uploadLocationNarrativeImage,
 } from "./ApiService";
 import { prepareImageForUpload } from "../prepareImageUpload";
+import { useToast } from "./Toast/ToastProvider";
+import { useUnsavedChanges } from "../hooks/useUnsavedChanges";
+import ConfirmDialog from "./ui/ConfirmDialog";
 
 const DEFAULT_COLOR = "#e6b422";
+const OVERVIEW_SCOPE = "Overview";
+
+const isOverviewLocation = (location) =>
+  (location || "").trim() === OVERVIEW_SCOPE;
+
+const pinOverviewFirst = (names) =>
+  [...names].sort((a, b) => {
+    if (a === OVERVIEW_SCOPE) return -1;
+    if (b === OVERVIEW_SCOPE) return 1;
+    return a.localeCompare(b);
+  });
 
 const groupLocationsByType = (items) => {
   const groups = [];
@@ -37,6 +51,13 @@ const groupLocationsByType = (items) => {
       has_image: !!item.has_image,
       has_narrative: !!item.has_narrative,
     });
+  }
+  const overviewIndex = groups.findIndex(
+    (group) => group.locationType === OVERVIEW_SCOPE
+  );
+  if (overviewIndex > 0) {
+    const [overview] = groups.splice(overviewIndex, 1);
+    groups.unshift(overview);
   }
   return groups;
 };
@@ -88,7 +109,43 @@ const NarrativeMapping = () => {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
+  // Baselines for dirty tracking — set whenever a narrative or branding record
+  // is loaded or saved, so switching away can warn about pending edits.
+  const [savedNarrativeText, setSavedNarrativeText] = useState("");
+  const [savedColor, setSavedColor] = useState(DEFAULT_COLOR);
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [locationFilter, setLocationFilter] = useState("");
+
+  const { showToast } = useToast();
+
+  const narrativeDirty = narrativeText !== savedNarrativeText;
+  const brandingDirty = customColor !== savedColor;
+  const isDirty = narrativeDirty || brandingDirty;
+
+  const { confirmDiscard } = useUnsavedChanges(
+    isDirty,
+    narrativeDirty
+      ? "This narrative has unsaved edits."
+      : "The branding colour has unsaved changes."
+  );
+
   const selectedDistrict = districts.find((d) => d.district_id === districtId);
+
+  // Navigation away from an edited narrative used to discard it silently.
+  const guardedSetDistrictId = (value) => {
+    if (value !== districtId && !confirmDiscard()) return;
+    setDistrictId(value);
+  };
+
+  const guardedSetCategory = (value) => {
+    if (value !== category && !confirmDiscard()) return;
+    setCategory(value);
+  };
+
+  const guardedSetLocation = (value) => {
+    if (value !== location && !confirmDiscard()) return;
+    setLocation(value);
+  };
 
   const categories = useMemo(() => {
     const names = [];
@@ -101,7 +158,7 @@ const NarrativeMapping = () => {
       seen.add(name);
       names.push(name);
     }
-    return names.sort((a, b) => a.localeCompare(b));
+    return pinOverviewFirst(names);
   }, [locations]);
 
   const locationsForCategory = useMemo(
@@ -113,6 +170,25 @@ const NarrativeMapping = () => {
     () => groupLocationsByType(locationsForCategory),
     [locationsForCategory]
   );
+
+  // Long districts can have hundreds of locations; the filter narrows the
+  // native select rather than replacing it with a custom combobox.
+  const filteredLocationGroups = useMemo(() => {
+    const needle = locationFilter.trim().toLowerCase();
+    if (!needle) {
+      return locationGroups;
+    }
+    return locationGroups
+      .map((group) => ({
+        ...group,
+        locations: group.locations.filter(
+          (item) =>
+            item.location.toLowerCase().includes(needle) ||
+            group.locationType.toLowerCase().includes(needle)
+        ),
+      }))
+      .filter((group) => group.locations.length > 0);
+  }, [locationGroups, locationFilter]);
 
   const selectedLocationMeta = useMemo(
     () =>
@@ -129,9 +205,20 @@ const NarrativeMapping = () => {
     : !(narrativeText || "").trim();
 
   const missingNarrativeCount = useMemo(
-    () => locations.filter((item) => !item.has_narrative).length,
+    () =>
+      locations.filter(
+        (item) => !isOverviewLocation(item.location) && !item.has_narrative
+      ).length,
     [locations]
   );
+
+  const isOverviewPair = isOverviewLocation(location);
+  const locationOnlyPairs = locations.filter(
+    (item) => !isOverviewLocation(item.location)
+  );
+  const onlyOverviewLocations =
+    locationsForCategory.length > 0 &&
+    locationsForCategory.every((item) => isOverviewLocation(item.location));
 
   useEffect(() => {
     let cancelled = false;
@@ -167,6 +254,7 @@ const NarrativeMapping = () => {
     setLocations([]);
     setImageUrl("");
     setNarrativeText("");
+    setSavedNarrativeText("");
 
     Promise.all([
       fetchDistrictBranding({ districtId }),
@@ -175,13 +263,23 @@ const NarrativeMapping = () => {
       .then(([brandingData, locationsData]) => {
         if (cancelled) return;
         const branding = brandingData.branding || {};
-        setCustomColor(branding.custom_color || DEFAULT_COLOR);
+        const nextColor = branding.custom_color || DEFAULT_COLOR;
+        setCustomColor(nextColor);
+        setSavedColor(nextColor);
         setLogoUrl(branding.logo_url || "");
         const list = locationsData.locations || [];
         setLocations(list);
-        const firstCategory = list[0]?.category || "";
+        const categoryNames = pinOverviewFirst(
+          [...new Set(list.map((item) => (item.category || "").trim()).filter(Boolean))]
+        );
+        const firstCategory = categoryNames[0] || list[0]?.category || "";
         setCategory(firstCategory);
         const firstLocation =
+          list.find(
+            (item) =>
+              item.category === firstCategory &&
+              isOverviewLocation(item.location)
+          )?.location ||
           list.find((item) => item.category === firstCategory)?.location ||
           list[0]?.location ||
           "";
@@ -214,7 +312,12 @@ const NarrativeMapping = () => {
       return;
     }
     const nextLocation =
-      locations.find((item) => item.category === category)?.location || "";
+      locations.find(
+        (item) =>
+          item.category === category && isOverviewLocation(item.location)
+      )?.location ||
+      locations.find((item) => item.category === category)?.location ||
+      "";
     setLocation(nextLocation);
   }, [category, locations, location]);
 
@@ -233,6 +336,7 @@ const NarrativeMapping = () => {
           htmlToPlainText(narrative.narrative_html || "");
         setImageUrl(nextImage);
         setNarrativeText(nextText);
+        setSavedNarrativeText(nextText);
         setLocations((current) =>
           patchPairStatus(current, category, location, {
             has_image: !!nextImage.trim(),
@@ -264,13 +368,17 @@ const NarrativeMapping = () => {
         logo_url: logoUrl || undefined,
       });
       const branding = result.branding || {};
-      setCustomColor(branding.custom_color || customColor);
+      const nextColor = branding.custom_color || customColor;
+      setCustomColor(nextColor);
+      setSavedColor(nextColor);
       setLogoUrl(branding.logo_url || logoUrl);
-      setNotice(
-        `Branding saved for ${result.district_name || selectedDistrict?.district_name || "district"}.`
+      showToast(
+        `Branding saved for ${result.district_name || selectedDistrict?.district_name || "this district"}.`,
+        { variant: "success", title: "Branding updated" }
       );
     } catch (err) {
       setError(err.message);
+      showToast(err.message, { variant: "error", title: "Could not save branding" });
     } finally {
       setSavingBranding(false);
     }
@@ -289,13 +397,15 @@ const NarrativeMapping = () => {
       const result = await uploadDistrictLogo(districtId, uploadFile);
       const branding = result.branding || {};
       setLogoUrl(branding.logo_url || "");
-      setNotice(
+      showToast(
         compressed
-          ? "Logo compressed under 200 KB, uploaded to Cloud Storage, and saved."
-          : "Logo uploaded to Cloud Storage and saved."
+          ? "Logo compressed under 200 KB and saved."
+          : "Logo uploaded and saved.",
+        { variant: "success", title: "Logo updated" }
       );
     } catch (err) {
       setError(err.message);
+      showToast(err.message, { variant: "error", title: "Logo upload failed" });
     } finally {
       setUploadingLogo(false);
     }
@@ -322,22 +432,29 @@ const NarrativeMapping = () => {
       const nextText = narrative.narrative_text || plain;
       setImageUrl(nextImage);
       setNarrativeText(nextText);
+      setSavedNarrativeText(nextText);
       setLocations((current) =>
         patchPairStatus(current, category, location, {
           has_image: !!(nextImage || "").trim(),
           has_narrative: !!(nextText || "").trim(),
         })
       );
-      setNotice(`Narrative saved for ${category} / ${location}.`);
+      showToast(`Narrative saved for ${category} / ${location}.`, {
+        variant: "success",
+        title: "Narrative saved",
+      });
     } catch (err) {
       setError(err.message);
+      showToast(err.message, { variant: "error", title: "Could not save narrative" });
     } finally {
       setSavingNarrative(false);
     }
   };
 
   const handleGenerateNarrative = async () => {
-    if (!districtId || !category || !location) return;
+    if (!districtId || !category || !location || isOverviewLocation(location)) {
+      return;
+    }
     setGeneratingNarrative(true);
     setError("");
     setNotice("");
@@ -364,19 +481,19 @@ const NarrativeMapping = () => {
     }
   };
 
-  const handleGenerateAllNarratives = async () => {
+  const requestGenerateAll = () => {
     if (!districtId || generatingAllNarratives) return;
     if (missingNarrativeCount === 0) {
-      setNotice("All category/location pairs already have narratives.");
+      showToast("All category and location pairs already have narratives.", {
+        variant: "info",
+      });
       return;
     }
-    const confirmed = window.confirm(
-      `Fill and save narratives for ${missingNarrativeCount} missing ` +
-        `category/location pair${missingNarrativeCount === 1 ? "" : "s"}?\n\n` +
-        "Existing narratives will be skipped. This may take a few minutes."
-    );
-    if (!confirmed) return;
+    setBulkConfirmOpen(true);
+  };
 
+  const handleGenerateAllNarratives = async () => {
+    setBulkConfirmOpen(false);
     setGeneratingAllNarratives(true);
     setError("");
     setNotice(
@@ -400,11 +517,12 @@ const NarrativeMapping = () => {
           location
         );
         const narrative = refreshed.narrative || {};
-        setImageUrl(narrative.image_url || "");
-        setNarrativeText(
+        const refreshedText =
           (narrative.narrative_text || "").trim() ||
-            htmlToPlainText(narrative.narrative_html || "")
-        );
+          htmlToPlainText(narrative.narrative_html || "");
+        setImageUrl(narrative.image_url || "");
+        setNarrativeText(refreshedText);
+        setSavedNarrativeText(refreshedText);
       }
 
       const generated = result.generated || 0;
@@ -418,8 +536,12 @@ const NarrativeMapping = () => {
                 : ""
             }.`
           : "";
-      setNotice(
-        `Bulk generate finished: ${generated} saved, ${skipped} skipped (already had text).${failureHint}`
+      showToast(
+        `${generated} narrative${generated === 1 ? "" : "s"} saved, ${skipped} skipped (already had text).${failureHint}`,
+        {
+          variant: failed > 0 && generated === 0 ? "error" : "success",
+          title: "Bulk generate finished",
+        }
       );
       if (failed > 0 && generated === 0) {
         setError(
@@ -429,7 +551,7 @@ const NarrativeMapping = () => {
       }
     } catch (err) {
       setError(err.message);
-      setNotice("");
+      showToast(err.message, { variant: "error", title: "Bulk generate failed" });
     } finally {
       setGeneratingAllNarratives(false);
     }
@@ -459,13 +581,20 @@ const NarrativeMapping = () => {
           has_image: !!(nextImage || "").trim(),
         })
       );
-      setNotice(
+      showToast(
         compressed
-          ? "Location image compressed under 200 KB, uploaded to Cloud Storage, and saved."
-          : "Location image uploaded to Cloud Storage and saved."
+          ? "Image compressed under 200 KB and saved."
+          : "Image uploaded and saved.",
+        {
+          variant: "success",
+          title: isOverviewLocation(location)
+            ? "Overview image updated"
+            : "Location image updated",
+        }
       );
     } catch (err) {
       setError(err.message);
+      showToast(err.message, { variant: "error", title: "Image upload failed" });
     } finally {
       setUploadingImage(false);
     }
@@ -477,7 +606,7 @@ const NarrativeMapping = () => {
         <div>
           <h2 className={classes.title}>Narrative Mapping</h2>
           <p className={classes.subtitle}>
-            District branding and per-category location narrative content.
+            District branding plus overview and location narrative content.
           </p>
         </div>
       </div>
@@ -493,7 +622,7 @@ const NarrativeMapping = () => {
             <span>School district</span>
             <select
               value={districtId}
-              onChange={(event) => setDistrictId(event.target.value)}
+              onChange={(event) => guardedSetDistrictId(event.target.value)}
               required
             >
               {districts.map((district) => (
@@ -579,18 +708,19 @@ const NarrativeMapping = () => {
 
           <section className={classes.section}>
             <div className={classes.sectionIntro}>
-              <h3 className={classes.sectionTitle}>Location narratives</h3>
+              <h3 className={classes.sectionTitle}>Overview and location narratives</h3>
               <p className={classes.sectionLead}>
-                Choose a category and location to edit its image and text, or use
-                bulk AI below to fill every pair that is still missing narrative
-                text.
+                Choose a category and an overview or location to edit its image
+                and text. Overview is the district- or category-level copy.
+                Bulk AI below fills location pairs that are still missing text.
               </p>
-              {!loadingLocations && locations.length > 0 && (
+              {!loadingLocations && locationOnlyPairs.length > 0 && (
                 <p className={classes.progressMeta} aria-live="polite">
                   <strong>
-                    {locations.length - missingNarrativeCount} of {locations.length}
+                    {locationOnlyPairs.length - missingNarrativeCount} of{" "}
+                    {locationOnlyPairs.length}
                   </strong>{" "}
-                  pairs have narrative text
+                  location pairs have narrative text
                   {missingNarrativeCount > 0
                     ? ` · ${missingNarrativeCount} still missing`
                     : " · all complete"}
@@ -610,7 +740,8 @@ const NarrativeMapping = () => {
                   <div className={classes.workBlockHeader}>
                     <h4 className={classes.workBlockTitle}>Edit one pair</h4>
                     <p className={classes.workBlockHint}>
-                      Changes here apply only to the selected category and location.
+                      Changes here apply only to the selected overview or
+                      location.
                     </p>
                   </div>
 
@@ -620,7 +751,7 @@ const NarrativeMapping = () => {
                         <span>Category / Department</span>
                         <select
                           value={category}
-                          onChange={(event) => setCategory(event.target.value)}
+                          onChange={(event) => guardedSetCategory(event.target.value)}
                           required
                           disabled={generatingAllNarratives}
                         >
@@ -633,14 +764,31 @@ const NarrativeMapping = () => {
                       </label>
 
                       <label className={classes.field}>
-                        <span>Location</span>
+                        <span>Overview or location</span>
+                        {!onlyOverviewLocations && (
+                          <input
+                            type="search"
+                            className={classes.locationFilter}
+                            placeholder="Filter locations…"
+                            value={locationFilter}
+                            onChange={(event) => setLocationFilter(event.target.value)}
+                            disabled={!category || generatingAllNarratives}
+                          />
+                        )}
                         <select
                           value={location}
-                          onChange={(event) => setLocation(event.target.value)}
+                          onChange={(event) => guardedSetLocation(event.target.value)}
                           required
                           disabled={!category || generatingAllNarratives}
+                          size={
+                            onlyOverviewLocations
+                              ? undefined
+                              : filteredLocationGroups.length > 0
+                                ? 8
+                                : undefined
+                          }
                         >
-                          {locationGroups.map((group) => (
+                          {filteredLocationGroups.map((group) => (
                             <optgroup
                               key={group.locationType}
                               label={group.locationType}
@@ -656,6 +804,12 @@ const NarrativeMapping = () => {
                             </optgroup>
                           ))}
                         </select>
+                        {locationFilter.trim() &&
+                          filteredLocationGroups.length === 0 && (
+                            <span className={classes.hint} role="status">
+                              No locations match “{locationFilter}”.
+                            </span>
+                          )}
                       </label>
                     </div>
 
@@ -684,7 +838,7 @@ const NarrativeMapping = () => {
                         <div className={classes.logoSection}>
                           <div className={classes.field}>
                             <span>
-                              Location image
+                              {isOverviewPair ? "Overview image" : "Location image"}
                               {selectedMissingImage ? (
                                 <span className={classes.fieldBadgeMissing}>
                                   Missing
@@ -746,15 +900,22 @@ const NarrativeMapping = () => {
                               </span>
                               <p className={classes.hint}>
                                 Plain text only — Tableau cannot render HTML.
-                                Draft with AI fills the box; Save writes it to
-                                BigQuery.
+                                {isOverviewPair
+                                  ? " AI draft is only available for location-level narratives."
+                                  : " Draft with AI fills the box; Save writes it to BigQuery."}
                               </p>
                             </div>
                             <button
                               type="button"
                               className={classes.secondaryBtn}
                               onClick={handleGenerateNarrative}
+                              title={
+                                isOverviewPair
+                                  ? "AI draft is only available for location-level narratives"
+                                  : undefined
+                              }
                               disabled={
+                                isOverviewPair ||
                                 savingNarrative ||
                                 generatingNarrative ||
                                 generatingAllNarratives ||
@@ -782,7 +943,11 @@ const NarrativeMapping = () => {
                               generatingAllNarratives ||
                               uploadingImage
                             }
-                            placeholder="Write or draft the narrative for this category and location…"
+                            placeholder={
+                              isOverviewPair
+                                ? "Write the overview narrative for this category…"
+                                : "Write or draft the narrative for this category and location…"
+                            }
                           />
                           <div className={classes.formActionsStart}>
                             <button
@@ -802,6 +967,11 @@ const NarrativeMapping = () => {
                                 ? "Saving…"
                                 : "Save this narrative"}
                             </button>
+                            {narrativeDirty && !savingNarrative && (
+                              <span className={classes.dirtyHint} role="status">
+                                Unsaved changes
+                              </span>
+                            )}
                           </div>
                         </div>
                       </>
@@ -815,10 +985,10 @@ const NarrativeMapping = () => {
                       Fill missing narratives with AI
                     </h4>
                     <p className={classes.workBlockHint}>
-                      Runs Gemini for every category/location that still has no
-                      text, then saves each result automatically. Pairs that
-                      already have a narrative are skipped. Does not change
-                      images.
+                      Runs Gemini for every location that still has no text,
+                      then saves each result automatically. Overview rows and
+                      pairs that already have a narrative are skipped. Does not
+                      change images.
                     </p>
                   </div>
 
@@ -849,7 +1019,7 @@ const NarrativeMapping = () => {
                     <button
                       type="button"
                       className={classes.secondaryBtn}
-                      onClick={handleGenerateAllNarratives}
+                      onClick={requestGenerateAll}
                       disabled={
                         !districtId ||
                         loadingLocations ||
@@ -857,7 +1027,7 @@ const NarrativeMapping = () => {
                         generatingNarrative ||
                         savingNarrative ||
                         uploadingImage ||
-                        locations.length === 0 ||
+                        locationOnlyPairs.length === 0 ||
                         missingNarrativeCount === 0
                       }
                     >
@@ -876,6 +1046,17 @@ const NarrativeMapping = () => {
           </section>
         </>
       )}
+
+      <ConfirmDialog
+        open={bulkConfirmOpen}
+        title="Fill missing narratives with AI?"
+        message={`${missingNarrativeCount} category and location pair${
+          missingNarrativeCount === 1 ? "" : "s"
+        } will get an AI-drafted narrative saved automatically. Pairs that already have text are skipped. This can take a few minutes.`}
+        confirmLabel="Generate and save"
+        onConfirm={handleGenerateAllNarratives}
+        onCancel={() => setBulkConfirmOpen(false)}
+      />
     </div>
   );
 };

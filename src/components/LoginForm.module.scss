@@ -7,8 +7,8 @@
   width: 420px;
   margin: 0;
   background-color: $surface-white;
-  border: 1px solid #e3e7eb;
-  border-radius: 12px;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
   box-shadow: 0 12px 40px rgba(42, 48, 55, 0.1);
   padding: 36px 40px 32px;
   box-sizing: border-box;
@@ -25,8 +25,8 @@ input {
 
 .input {
   @extend .mainInputStyle;
-  border: 1px solid #d0d5da;
-  border-radius: 8px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
   margin-top: $main-margin;
   outline: 2px solid transparent;
   outline-offset: 0;
@@ -39,7 +39,7 @@ input {
 
   &:focus {
     border-color: $accent-theme;
-    box-shadow: 0 0 0 3px $brand-teal-18;
+    box-shadow: 0 0 0 3px var(--accent-ring);
     background-color: $surface-white;
     outline: none;
   }
@@ -55,7 +55,7 @@ input {
   height: 48px;
   background-color: $accent-theme;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   margin-bottom: 4px;
   font-weight: 700;
   cursor: pointer;
@@ -72,14 +72,51 @@ input {
   }
 }
 
+.loginOptions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.rememberMe {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-body);
+  cursor: pointer;
+
+  input {
+    accent-color: $accent-theme;
+    width: 15px;
+    height: 15px;
+    margin: 0;
+    padding: 0;
+    cursor: pointer;
+  }
+
+  &:focus-within span {
+    text-decoration: underline;
+  }
+}
+
 .forgot {
   font-size: 13px;
   font-weight: 400;
   color: var(--text-body);
-  margin-top: 14px;
   text-align: left;
   text-decoration: underline;
   cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid $accent-theme;
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
 }
 
 .loginInstructions {
